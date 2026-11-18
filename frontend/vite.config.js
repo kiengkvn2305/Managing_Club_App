@@ -4,6 +4,7 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    allowedHosts: ["shopper-reheat-earshot.ngrok-free.dev"],
     proxy: {
       "/api": { target, changeOrigin: false },
       "/sanctum": { target, changeOrigin: false },

@@ -1809,6 +1809,29 @@ dialog::backdrop {
 .roadmap-card p { color: var(--muted); font-size: 13px; line-height: 1.7; }
 .roadmap-card .text-link { margin-top: auto; }
 .discovery-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 14px; padding: 18px 24px; }
+.inventory-more { margin-top: 6px; }
+.inventory-more summary, .inventory-options summary { cursor: pointer; color: var(--muted); }
+.inventory-more p { margin: 8px 0; color: var(--muted); }
+.inventory-options { margin: 12px 0; }
+.inventory-options .field { margin-top: 12px; }
+.birthday-month-label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.birthday-month-label select { min-height: 36px; max-width: 110px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
+/* Keep selection controls compact inside forms and filters on every screen size. */
+input[type="checkbox"],
+input[type="radio"],
+.filters input[type="checkbox"],
+.filters input[type="radio"],
+.field input[type="checkbox"],
+.field input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  flex: 0 0 16px;
+  padding: 0;
+  vertical-align: middle;
+  accent-color: var(--accent, #159b72);
+}
 .discovery-card { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .discovery-card .avatar { width: 52px; height: 52px; border-radius: 14px; }
 .discovery-card h3 { color: var(--ink); font-size: 15px; }

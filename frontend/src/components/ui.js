@@ -1,4 +1,4 @@
-import { escapeHtml as e } from "../utils.js";
+import { escapeHtml as e, formatDate, validDate } from "../utils.js";
 export const icons = {
   grid: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
   users:
@@ -31,7 +31,9 @@ export function field(
 ) {
   const attributes = `id="f-${name}" name="${name}" aria-describedby="error-${name}" ${required ? "required" : ""}`;
   const control =
-    type === "textarea"
+    type === "date"
+      ? `<input type="hidden" name="${name}" value="${e(value)}"><input id="f-${name}" type="text" inputmode="numeric" placeholder="dd/mm/yyyy" maxlength="10" data-date-input="${name}" aria-describedby="error-${name}" ${required ? 'data-date-required="true"' : ''} value="${e(formatDate(value))}">`
+      : type === "textarea"
       ? `<textarea ${attributes} rows="3">${e(value)}</textarea>`
       : `<input ${attributes} type="${type}" value="${e(value)}" ${type === "password" ? 'autocomplete="current-password"' : ""} ${type === "number" ? 'min="0" max="999"' : ""}>`;
   return `<div class="field"><label for="f-${name}">${label}${required ? " *" : ""}</label>${control}<small id="error-${name}" data-error="${name}"></small></div>`;
@@ -90,6 +92,16 @@ export function dialog(
   );
   el.querySelector("form").onsubmit = async (event) => {
     event.preventDefault();
+    for (const input of event.currentTarget.querySelectorAll('[data-date-input]')) {
+      const value = input.value.trim();
+      const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+      const iso = match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+      if ((value && (!iso || !validDate(iso))) || (!value && input.dataset.dateRequired)) {
+        showErrors(event.currentTarget, { [input.dataset.dateInput]: 'Nhập ngày hợp lệ theo định dạng dd/mm/yyyy.' }, 'Vui lòng kiểm tra ngày đã nhập.');
+        input.setAttribute('aria-invalid', 'true'); input.focus(); return;
+      }
+      event.currentTarget.elements.namedItem(input.dataset.dateInput).value = iso;
+    }
     if (await onSubmit(event.currentTarget)) el.close();
   };
   el.showModal();

@@ -1,10 +1,10 @@
 import { dialog, field, select, showErrors, toast } from "./components/ui.js";
-import { escapeHtml as e } from "./utils.js";
+import { escapeHtml as e, compareVietnameseNames } from "./utils.js";
 
 export function openCaptain({ team, players, api, base, reload }) {
   if (!team) return;
-  const options = [["", "Chưa chọn"], ...players.filter((p) => (p.teams || []).some((t) => String(t.id) === String(team.id))).map((p) => { const n = p.teams.find((t) => String(t.id) === String(team.id))?.jersey_number; return [p.id, `${p.full_name}${n == null ? "" : ` #${n}`}`]; })];
-  dialog("Chọn đội trưởng", `Đội ${e(team.name)}`, select("captain_id", "Đội trưởng", options, team.captain_id || ""), async (form) => {
+  const candidates = players.filter((p) => (p.teams || []).some((t) => String(t.id) === String(team.id)));
+  const modal = dialog("Chọn đội trưởng", `Đội ${e(team.name)}`, field('captain_search', 'Tìm tên hoặc ghi chú', '', 'search') + `<label>Sắp xếp <select data-captain-sort><option value="asc">Tên A–Z</option><option value="desc">Tên Z–A</option></select></label>` + select("captain_id", "Đội trưởng", [["", "Chưa chọn"]], ""), async (form) => {
     try {
       await api.patch(base(`/teams/${team.id}/captain`), { captain_id: form.elements.captain_id.value ? Number(form.elements.captain_id.value) : null });
       await reload();
@@ -12,6 +12,16 @@ export function openCaptain({ team, players, api, base, reload }) {
       return true;
     } catch (error) { showErrors(form, error.errors, error.message); return false; }
   });
+  const search = modal.querySelector('[name="captain_search"]'), picker = modal.querySelector('[name="captain_id"]'), sort = modal.querySelector('[data-captain-sort]');
+  let selected = String(team.captain_id || '');
+  picker.addEventListener('change', () => { selected = picker.value; });
+  const refresh = () => {
+    const query = search.value.trim().toLocaleLowerCase('vi'), direction = sort.value === 'desc' ? -1 : 1;
+    const filtered = candidates.filter((p) => String(p.id) === selected || [p.full_name, p.notes].some((v) => String(v || '').toLocaleLowerCase('vi').includes(query))).sort((a,b) => direction * compareVietnameseNames(a.full_name, b.full_name));
+    picker.innerHTML = '<option value="">Chưa chọn</option>' + filtered.map((p) => `<option value="${e(p.id)}">${e(p.full_name)}${p.teams.find((t) => String(t.id) === String(team.id))?.jersey_number == null ? '' : ` #${e(p.teams.find((t) => String(t.id) === String(team.id)).jersey_number)}`}</option>`).join('');
+    picker.value = selected;
+  };
+  search.addEventListener('input', refresh); sort.addEventListener('change', refresh); refresh();
 }
 
 export function openLineup({ teams, players, lineup, linkedMatch, api, base, reload }) {

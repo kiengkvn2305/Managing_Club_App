@@ -16,6 +16,11 @@ export const initials = (value) =>
     .toLocaleUpperCase("vi");
 export const number = (value) =>
   new Intl.NumberFormat("vi-VN").format(Number(value) || 0);
+export const compareVietnameseNames = (a, b) => {
+  const clean = (name) => String(name || '').trim();
+  const first = (name) => clean(name).split(/\s+/).pop();
+  return first(a).localeCompare(first(b), 'vi') || clean(a).localeCompare(clean(b), 'vi');
+};
 export const roleLabel = (role) =>
   ({
     owner: "Chủ sở hữu",
@@ -48,6 +53,24 @@ export function validDate(value) {
     !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
   );
 }
+export function formatDate(value) {
+  if (!value) return '';
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match && validDate(match[0]) ? `${match[3]}/${match[2]}/${match[1]}` : String(value);
+}
+export function vietnamToday(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type).value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+export function formatVietnamDateTime(value) {
+  if (!value) return '';
+  const text = String(value);
+  const input = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(text) ? text.replace(' ', 'T') + 'Z' : text;
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return text;
+  return new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
+}
 export function validate(kind, data) {
   const errors = {};
   const required = (key, label) => {
@@ -74,7 +97,7 @@ export function validate(kind, data) {
     if (
       data.date_of_birth &&
       (!validDate(data.date_of_birth) ||
-        data.date_of_birth > new Date().toISOString().slice(0, 10))
+        data.date_of_birth > vietnamToday())
     )
       errors.date_of_birth = "Ngày sinh không hợp lệ.";
     if (!["active", "inactive", "injured"].includes(data.status))

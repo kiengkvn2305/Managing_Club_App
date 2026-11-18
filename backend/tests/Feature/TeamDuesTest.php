@@ -13,6 +13,59 @@ class TeamDuesTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_shared_board_rate_applies_to_all_board_members_and_preserves_recorded_dues(): void
+    {
+        CarbonImmutable::setTestNow('2026-05-01 10:00:00 Asia/Ho_Chi_Minh');
+        try {
+            $this->actingAs(User::factory()->create());
+            $club = $this->postJson('/api/v1/clubs', ['name' => 'CLB', 'format' => '7'])->assertCreated()->json('data.id'); $base = "/api/v1/clubs/$club";
+            $team = $this->postJson("$base/teams", ['name' => 'A', 'format' => '7'])->assertCreated()->json('data.id');
+            $this->patchJson("$base/teams/$team", ['name' => 'A', 'dues_amount' => 100, 'dues_month' => '2026-05'])->assertOk();
+            $players = [];
+            foreach (['An', 'Binh', 'Chi'] as $name) $players[] = $this->postJson("$base/members", ['full_name' => $name])->assertCreated()->json('data.id');
+            $this->patchJson("$base/teams/$team/players", ['player_ids' => $players])->assertNoContent();
+            foreach (array_slice($players, 0, 2) as $id) $this->postJson("$base/board-members", ['player_id' => $id, 'title' => 'BCN'])->assertCreated();
+            $this->postJson("$base/dues", ['player_id' => $players[0], 'month' => '2026-06', 'months' => 1, 'status' => 'paid'])->assertCreated();
+            $this->postJson("$base/board-dues-rate", ['team_id' => $team, 'amount' => 40, 'effective_month' => '2026-05'])->assertNoContent();
+            $this->getJson("$base/dues?month=2026-05")->assertJsonPath('data.0.total', 40)->assertJsonPath('data.1.total', 40)->assertJsonPath('data.2.total', 100);
+            $this->getJson("$base/dues?month=2026-06")->assertJsonPath('data.0.total', 100)->assertJsonPath('data.1.total', 40);
+            $this->getJson("$base/teams/$team/dues")->assertJsonPath("data.{$players[0]}.debt", 40)->assertJsonPath("data.{$players[1]}.debt", 40)->assertJsonPath("data.{$players[2]}.debt", 100);
+            $this->getJson("$base/finance")->assertJsonPath('summary.income', 100);
+            $this->postJson("$base/board-dues-rate", ['team_id' => $team, 'amount' => 101, 'effective_month' => '2026-05'])->assertUnprocessable();
+        } finally { CarbonImmutable::setTestNow(); }
+    }
+
+    public function test_board_fixed_dues_preserve_paid_months_and_end_after_leaving(): void
+    {
+        CarbonImmutable::setTestNow('2026-05-01 10:00:00 Asia/Ho_Chi_Minh');
+        try {
+            $owner = User::factory()->create(); $this->actingAs($owner);
+            $club = $this->postJson('/api/v1/clubs', ['name' => 'CLB', 'format' => '7'])->assertCreated()->json('data.id'); $base = "/api/v1/clubs/$club";
+            $one = $this->postJson("$base/teams", ['name' => 'A', 'format' => '7'])->assertCreated()->json('data.id');
+            $two = $this->postJson("$base/teams", ['name' => 'B', 'format' => '7'])->assertCreated()->json('data.id');
+            $player = $this->postJson("$base/members", ['full_name' => 'An'])->assertCreated()->json('data.id');
+            foreach ([[$one, 'A', 100], [$two, 'B', 200]] as [$team, $name, $amount]) {
+                $this->patchJson("$base/teams/$team", ['name' => $name, 'dues_amount' => $amount, 'dues_month' => '2026-05'])->assertOk();
+                $this->patchJson("$base/teams/$team/players", ['player_ids' => [$player]])->assertNoContent();
+            }
+            $board = $this->postJson("$base/board-members", ['player_id' => $player, 'title' => 'Thủ quỹ'])->assertCreated()->json('data.id');
+            $this->postJson("$base/dues", ['player_id' => $player, 'month' => '2026-06', 'months' => 1, 'status' => 'paid'])->assertCreated();
+            foreach ([[$one, 50], [$two, 0]] as [$team, $amount]) DB::table('board_dues_rates')->insert(['club_id' => $club, 'team_id' => $team, 'player_id' => $player, 'amount' => $amount, 'effective_month' => '2026-05-01', 'created_at' => now(), 'updated_at' => now()]);
+            $this->getJson("$base/dues?month=2026-05")->assertJsonPath('data.0.total', 50)->assertJsonPath('data.0.debt', 50);
+            $this->getJson("$base/teams/$one/dues")->assertJsonPath("data.$player.debt", 50);
+            $this->getJson("$base/teams/$two/dues")->assertJsonPath("data.$player.debt", 0);
+            $this->getJson("$base/dues?month=2026-06")->assertJsonPath('data.0.total', 300);
+            $this->getJson("$base/finance")->assertJsonPath('summary.income', 300);
+            $this->postJson("$base/board-dues-rate", ['team_id' => $one, 'amount' => 101, 'effective_month' => '2026-05'])->assertUnprocessable();
+            $this->postJson("$base/board-dues-rate", ['team_id' => $one, 'amount' => 30, 'effective_month' => '2026-04'])->assertUnprocessable();
+            CarbonImmutable::setTestNow('2026-05-03 10:00:00 Asia/Ho_Chi_Minh');
+            $this->postJson("$base/board-dues-rate", ['team_id' => $one, 'amount' => 30, 'effective_month' => '2026-05'])->assertUnprocessable();
+            $this->deleteJson("$base/board-members/$board")->assertNoContent();
+            $this->getJson("$base/dues?month=2026-05")->assertJsonPath('data.0.total', 50);
+            $this->getJson("$base/dues?month=2026-07")->assertJsonPath('data.0.total', 300);
+        } finally { CarbonImmutable::setTestNow(); }
+    }
+
     public function test_correction_preserves_other_payments_and_reconciles_income(): void
     {
         CarbonImmutable::setTestNow('2026-05-01 10:00:00 Asia/Ho_Chi_Minh');

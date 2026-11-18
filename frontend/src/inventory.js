@@ -1,5 +1,5 @@
 import { dialog, field, select, showErrors, toast } from './components/ui.js';
-import { escapeHtml as e, number } from './utils.js';
+import { escapeHtml as e, number, formatVietnamDateTime, formatDate } from './utils.js';
 
 function submitOnce(form, operation) {
   const submit = form.querySelector('[type="submit"]');
@@ -9,8 +9,8 @@ function submitOnce(form, operation) {
 }
 
 export function openInventoryItem({ item, api, base, reload }) {
-  const fields = field('name', 'Tên vật tư', item?.name || '', 'text', true) + field('category', 'Nhóm', item?.category || '') + field('unit', 'Đơn vị', item?.unit || 'cái', 'text', true) + select('kind', 'Loại', [['consumable', 'Vật tư tiêu hao'], ['asset', 'Tài sản']], item?.kind || 'consumable') + field('low_stock_threshold', 'Ngưỡng cảnh báo tồn thấp', item?.low_stock_threshold ?? 0, 'number', true) + field('notes', 'Ghi chú', item?.notes || '', 'textarea');
-  const modal = dialog(item ? 'Chỉnh sửa vật tư' : 'Thêm vật tư', 'Số lượng ban đầu bằng 0; dùng nhập kho để ghi nhận số lượng và lịch sử.', fields, (form) => submitOnce(form, async () => {
+  const fields = field('name', 'Tên trang bị', item?.name || '', 'text', true) + field('unit', 'Đơn vị', item?.unit || 'cái', 'text', true) + select('kind', 'Loại', [['consumable', 'Vật tư tiêu hao'], ['asset', 'Tài sản có thể cấp phát']], item?.kind || 'consumable') + `<details class="inventory-options"><summary>Thông tin bổ sung</summary>${field('category', 'Nhóm', item?.category || '')}${field('low_stock_threshold', 'Cảnh báo khi số lượng còn', item?.low_stock_threshold ?? 0, 'number', true)}${field('notes', 'Ghi chú', item?.notes || '', 'textarea')}</details>`;
+  const modal = dialog(item ? 'Chỉnh sửa trang bị' : 'Thêm trang bị', item ? 'Cập nhật thông tin trang bị.' : 'Sau khi thêm, chọn Nhập / xuất để ghi số lượng.', fields, (form) => submitOnce(form, async () => {
     const data = Object.fromEntries(new FormData(form)); data.low_stock_threshold = data.low_stock_threshold === '' ? null : Number(data.low_stock_threshold);
     if (item) await api.patch(base(`/inventory/${item.id}`), data); else await api.post(base('/inventory'), data);
     await reload(); toast('Đã lưu vật tư.');
@@ -34,7 +34,7 @@ export async function showInventoryHistory({ item, api, base }) {
   const render = async () => {
     const result = await api.get(base(`/inventory/${item.id}/movements?page=${page}`));
     const labels = { in: 'Nhập', out: 'Xuất', adjust: 'Kiểm kê', assign: 'Cấp phát', return: 'Thu hồi' };
-    const rows = result.data.map((m) => `<tr><td>${e(m.created_at)}</td><td>${e(labels[m.type] || m.type)}</td><td>${m.change > 0 ? '+' : ''}${number(m.change)}</td><td>${number(m.balance_after)}</td><td>${e(m.reason)}</td></tr>`).join('');
+    const rows = result.data.map((m) => `<tr><td>${e(formatVietnamDateTime(m.created_at))}</td><td>${e(labels[m.type] || m.type)}</td><td>${m.change > 0 ? '+' : ''}${number(m.change)}</td><td>${number(m.balance_after)}</td><td>${e(m.reason)}</td></tr>`).join('');
     const host = document.createElement('dialog'); host.setAttribute('aria-label', 'Lịch sử kho');
     host.innerHTML = `<div class="dialog-head"><div><h2>Lịch sử · ${e(item.name)}</h2><p>Lịch sử biến động không thể sửa hoặc xóa.</p></div><button type="button" class="icon-button" data-close aria-label="Đóng">×</button></div><div class="dialog-body">${rows ? `<div class="table-wrap"><table><thead><tr><th>Thời gian</th><th>Nghiệp vụ</th><th>Thay đổi</th><th>Tồn sau</th><th>Lý do</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p>Chưa có biến động.</p>'}<div class="table-footer"><button class="icon-button" data-prev ${page <= 1 ? 'disabled' : ''}>←</button> ${page} / ${result.last_page} <button class="icon-button" data-next ${page >= result.last_page ? 'disabled' : ''}>→</button></div></div>`;
     document.body.append(host); host.querySelector('[data-close]').onclick = () => host.close();
@@ -50,7 +50,7 @@ export async function showInventoryAssignments({ item, api, base, reload, canMan
   const render = async () => {
     const result = await api.get(base(`/inventory/${item.id}/assignments?page=${page}`));
     const host = document.createElement('dialog'); host.setAttribute('aria-label', 'Cấp phát trang bị');
-    const rows = result.data.map((a) => `<tr><td>${e(a.player_name)}</td><td>${e(a.created_at)}</td><td>${number(a.quantity)}</td><td>${number(a.remaining)}</td><td>${canManage && !item.archived && a.remaining > 0 ? `<button type="button" class="text-button" data-return="${a.id}">Thu hồi</button>` : '—'}</td></tr>`).join('');
+    const rows = result.data.map((a) => `<tr><td>${e(a.player_name)}</td><td>${e(formatVietnamDateTime(a.created_at))}</td><td>${number(a.quantity)}</td><td>${number(a.remaining)}</td><td>${canManage && !item.archived && a.remaining > 0 ? `<button type="button" class="text-button" data-return="${a.id}">Thu hồi</button>` : '—'}</td></tr>`).join('');
     host.innerHTML = `<div class="dialog-head"><div><h2>Cấp phát · ${e(item.name)}</h2><p>Theo dõi số lượng đang mượn và đã thu hồi.</p></div><button type="button" class="icon-button" data-close aria-label="Đóng">×</button></div><div class="dialog-body">${canManage && !item.archived ? '<button type="button" class="button" data-assign>Cấp phát mới</button>' : ''}${rows ? `<div class="table-wrap"><table><thead><tr><th>Thành viên</th><th>Thời gian</th><th>Đã cấp</th><th>Còn mượn</th><th>Thao tác</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p>Chưa có cấp phát.</p>'}<div class="table-footer"><button class="icon-button" data-prev aria-label="Trang trước" ${page <= 1 ? 'disabled' : ''}>←</button> ${page} / ${result.last_page} <button class="icon-button" data-next aria-label="Trang sau" ${page >= result.last_page ? 'disabled' : ''}>→</button></div></div>`;
     document.body.append(host); host.querySelector('[data-close]').onclick = () => host.close();
     const refresh = async () => { host.close(); await reload(); await render(); };
@@ -72,7 +72,7 @@ export async function showInventoryAssignments({ item, api, base, reload, canMan
 }
 
 function openInventoryAssignment({ item, api, base, refresh }) {
-  const fields = `<div class="field"><label for="assignment-search">Tìm thành viên</label><input id="assignment-search" type="search" autocomplete="off"><button type="button" class="button secondary" data-search>Tìm</button><div><button type="button" class="icon-button" data-prev aria-label="Trang trước">←</button> <span data-page></span> <button type="button" class="icon-button" data-next aria-label="Trang sau">→</button></div></div><div class="field"><label for="f-player_id">Thành viên *</label><select id="f-player_id" name="player_id" required></select><small data-error="player_id"></small></div>` + field('quantity', 'Số lượng', '', 'number', true) + field('reason', 'Lý do / ghi chú', '', 'textarea', true);
+  const fields = `<div class="field"><label for="assignment-search">Tìm tên hoặc ghi chú</label><input id="assignment-search" type="search" autocomplete="off"><label for="assignment-order">Sắp xếp</label><select id="assignment-order"><option value="asc">Tên A–Z</option><option value="desc">Tên Z–A</option></select><button type="button" class="button secondary" data-search>Tìm</button><div><button type="button" class="icon-button" data-prev aria-label="Trang trước">←</button> <span data-page></span> <button type="button" class="icon-button" data-next aria-label="Trang sau">→</button></div></div><div class="field"><label for="f-player_id">Thành viên *</label><select id="f-player_id" name="player_id" required></select><small data-error="player_id"></small></div>` + field('quantity', 'Số lượng', '', 'number', true) + field('reason', 'Lý do / ghi chú', '', 'textarea', true);
   const modal = dialog('Cấp phát trang bị', `${e(item.name)}. Tìm theo tên, sau đó chọn thành viên.`, fields, (form) => submitOnce(form, async () => {
     const data = Object.fromEntries(new FormData(form)); data.quantity = data.quantity === '' ? null : Number(data.quantity);
     await api.post(base(`/inventory/${item.id}/assignments`), data); await refresh(); toast('Đã cấp phát trang bị.');
@@ -84,15 +84,16 @@ function openInventoryAssignment({ item, api, base, refresh }) {
     const selectEl = modal.querySelector('[name="player_id"]');
     selectEl.innerHTML = '<option value="">Đang tải thành viên...</option>'; selectEl.disabled = true;
     try {
-      const result = await api.get(base(`/inventory/members?search=${encodeURIComponent(search)}&page=${page}`));
+      const result = await api.get(base(`/inventory/members?search=${encodeURIComponent(search)}&page=${page}&direction=${modal.querySelector('#assignment-order').value}`));
       if (current !== serial || !modal.isConnected) return;
       last = result.last_page; selectEl.disabled = false;
-      selectEl.innerHTML = '<option value="">Chọn thành viên</option>' + result.data.map((p) => `<option value="${p.id}">${e([p.full_name, p.date_of_birth, p.email, (p.team_labels || []).join(', ') || 'Chưa xếp đội'].filter(Boolean).join(' · '))}</option>`).join('');
+      selectEl.innerHTML = '<option value="">Chọn thành viên</option>' + result.data.map((p) => `<option value="${p.id}">${e([p.full_name, formatDate(p.date_of_birth), p.email, (p.team_labels || []).join(', ') || 'Chưa xếp đội'].filter(Boolean).join(' · '))}</option>`).join('');
       modal.querySelector('[data-page]').textContent = `${page} / ${last}`;
       modal.querySelector('[data-prev]').disabled = page <= 1; modal.querySelector('[data-next]').disabled = page >= last;
     } catch (error) { if (current === serial && modal.isConnected) { selectEl.disabled = false; selectEl.innerHTML = '<option value="">Không tải được thành viên</option>'; toast(error.message, true); } }
   };
   modal.querySelector('[data-search]').onclick = () => { search = modal.querySelector('#assignment-search').value.trim(); page = 1; load(); };
+  modal.querySelector('#assignment-order').onchange = () => { page = 1; load(); };
   modal.querySelector('[data-prev]').onclick = () => { if (page > 1) { page--; load(); } };
   modal.querySelector('[data-next]').onclick = () => { if (page < last) { page++; load(); } };
   load();

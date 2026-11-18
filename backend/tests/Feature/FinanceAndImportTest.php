@@ -20,7 +20,8 @@ class FinanceAndImportTest extends TestCase
         $receipt = UploadedFile::fake()->createWithContent('receipt.png', $png);
         $payload = ['type' => 'income', 'amount' => 100, 'occurred_on' => '2026-02-01', 'description' => 'Phí', 'receipt' => $receipt];
         $entry = $this->post("/api/v1/clubs/$club/finance", $payload, ['Accept' => 'application/json'])->assertCreated()->json('data.id');
-        $this->postJson("/api/v1/clubs/$club/finance", ['type' => 'expense', 'amount' => 25, 'occurred_on' => '2026-03-01', 'description' => 'Sân'])->assertCreated();
+        $this->postJson("/api/v1/clubs/$club/finance", ['type' => 'expense', 'amount' => 25, 'occurred_on' => '2026-03-01', 'description' => 'Sân', 'category' => 'Sân tập', 'paid_by' => 'An', 'notes' => 'Hóa đơn 1'])->assertCreated()->assertJsonPath('data.category', 'Sân tập');
+        $this->getJson("/api/v1/clubs/$club/finance?from=2026-03-01&to=2026-03-01")->assertOk()->assertJsonPath('data.0.paid_by', 'An')->assertJsonPath('data.0.notes', 'Hóa đơn 1');
         $this->getJson("/api/v1/clubs/$club/finance?from=2026-02-01&to=2026-02-28")->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('summary.balance', 100)->assertJsonPath('data.0.has_receipt', true)->assertJsonMissingPath('data.0.receipt_path');
         $this->getJson("/api/v1/clubs/$club/finance?group=month")->assertOk()->assertJsonCount(2, 'chart')->assertJsonPath('chart.0.period', '2026-02');
         $this->getJson("/api/v1/clubs/$club/finance?group=year")->assertOk()->assertJsonPath('chart.0.period', '2026');

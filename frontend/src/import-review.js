@@ -1,11 +1,11 @@
 import { dialog, showErrors, toast } from './components/ui.js';
-import { escapeHtml as e, statusLabel } from './utils.js';
+import { escapeHtml as e, statusLabel, formatDate } from './utils.js';
 
 export function reviewImport({ rows, preview, api, base, reload }) {
   const duplicates = preview.map((item, index) => ({ ...item, index })).filter((x) => x.matches.length);
   const descriptions = (person) => [
     ['Họ tên', person.full_name], ['Email', person.email], ['Điện thoại', person.phone],
-    ['Ngày sinh', person.date_of_birth], ['Vị trí', person.position], ['Chân thuận', person.preferred_foot],
+    ['Ngày sinh', formatDate(person.date_of_birth)], ['Vị trí', person.position], ['Chân thuận', person.preferred_foot],
     ['Trạng thái', statusLabel(person.status)], ['Ghi chú', person.notes],
     ['Đội bóng', (person.teams || []).map((team) => team.name).join(', ')],
   ].map(([key, value]) => `<div><dt>${e(key)}</dt><dd>${e(value || 'Chưa có')}</dd></div>`).join('');

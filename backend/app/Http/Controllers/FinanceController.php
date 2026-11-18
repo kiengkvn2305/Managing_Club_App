@@ -48,7 +48,7 @@ class FinanceController extends Controller
     {
         $club = $request->attributes->get('club');
         Gate::authorize('manageFinance', $club);
-        $data = $request->validate(['type' => ['required', Rule::in(['income', 'expense'])], 'amount' => ['required', 'integer', 'between:1,1000000000000'], 'occurred_on' => ['required', 'date_format:Y-m-d'], 'description' => ['required', 'string', 'max:255'], 'receipt' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120']]);
+        $data = $request->validate(['type' => ['required', Rule::in(['income', 'expense'])], 'amount' => ['required', 'integer', 'between:1,1000000000000'], 'occurred_on' => ['required', 'date_format:Y-m-d'], 'description' => ['required', 'string', 'max:255'], 'category' => ['nullable', 'string', 'max:120'], 'paid_by' => ['nullable', 'string', 'max:120'], 'notes' => ['nullable', 'string', 'max:5000'], 'receipt' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120']]);
         $path = $request->hasFile('receipt') ? $request->file('receipt')->store('finance-receipts/'.$club->id, 'local') : null;
         if ($request->hasFile('receipt') && ! $path) throw ValidationException::withMessages(['receipt' => ['Không thể lưu ảnh xác nhận.']]);
         unset($data['receipt']);

@@ -61,6 +61,10 @@ class ClubController extends Controller
     {
         $club = $request->attributes->get('club');
         $teams = $club->teams()->orderBy('name')->get();
+        $counts = DB::table('team_players')->where('club_id', $club->id)
+            ->whereIn('team_id', $teams->pluck('id'))->selectRaw('team_id, COUNT(*) as total')
+            ->groupBy('team_id')->pluck('total', 'team_id');
+        $teams->each(fn ($team) => $team->members_count = (int) ($counts[$team->id] ?? 0));
         if ($request->user()->can('viewFinance', $club)) {
             $teams->each(function ($team) use ($club) { $team->monthly_dues = DB::table('team_dues_rates')->where('club_id', $club->id)->where('team_id', $team->id)->orderByDesc('effective_month')->first(); });
         }

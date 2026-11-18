@@ -1,3 +1,4 @@
+import { formatDate, validDate, formatVietnamDateTime } from './utils.js';
 const HEADERS = ['full_name', 'email', 'phone', 'date_of_birth', 'position', 'preferred_foot', 'status', 'notes'];
 async function workbook() {
   const module = await import('exceljs');
@@ -23,7 +24,7 @@ export async function downloadMemberTemplate() {
     ['Cột', 'Quy tắc'], ['full_name', 'Bắt buộc, tối đa 120 ký tự'],
     ['email', 'Không bắt buộc, không trùng trong CLB hoặc file'],
     ['phone', 'Không bắt buộc; đặt định dạng Text để giữ số 0 đầu'],
-    ['date_of_birth', 'Không bắt buộc; ghi YYYY-MM-DD, ví dụ 2002-01-31'],
+    ['date_of_birth', 'Không bắt buộc; ghi dd/mm/yyyy, ví dụ 31/01/2002'],
     ['position', 'Không bắt buộc; GK, FIXO, ALA, PIVOT, CB, LB, RB, CDM, CM, CAM, LM, RM, LW, RW, ST hoặc CF'],
     ['preferred_foot', 'Không bắt buộc; right, left hoặc both'],
     ['status', 'Không bắt buộc; active, inactive hoặc injured; để trống là active'],
@@ -57,6 +58,11 @@ export async function parseMembers(file) {
       } else {
         if (HEADERS[col] === 'phone' && typeof value === 'number') throw new Error(`Dòng ${index}: đặt số điện thoại dạng Text để giữ số 0 đầu.`);
         result[HEADERS[col]] = value == null || String(value).trim() === '' ? null : String(value).trim();
+        if (HEADERS[col] === 'date_of_birth' && result[HEADERS[col]]) {
+          const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(result[HEADERS[col]]);
+          if (match) result[HEADERS[col]] = `${match[3]}-${match[2]}-${match[1]}`;
+          if (!validDate(result[HEADERS[col]])) throw new Error(`Dòng ${index}: ngày sinh không hợp lệ; dùng dd/mm/yyyy.`);
+        }
       }
     }
     if (Object.values(result).every((x) => x === null)) continue;
@@ -67,16 +73,16 @@ export async function parseMembers(file) {
 }
 export async function exportFinance(items, summary, adjustments = []) {
   const book = await workbook(), sheet = book.addWorksheet('Thu chi');
-  sheet.addRow(['Ngày', 'Loại', 'Nội dung', 'Số tiền (đồng)', 'Có ảnh xác nhận']);
+  sheet.addRow(['Ngày', 'Loại', 'Nội dung', 'Số tiền (đồng)', 'Có ảnh xác nhận', 'Danh mục', 'Người thu / chi', 'Ghi chú / chứng từ']);
   sheet.getRow(1).font = { bold: true };
-  for (const item of items) sheet.addRow([String(item.occurred_on), item.type === 'income' ? 'Thu' : 'Chi', String(item.description), Number(item.amount), item.has_receipt ? 'Có' : 'Không']);
+  for (const item of items) sheet.addRow([formatDate(item.occurred_on), item.type === 'income' ? 'Thu' : 'Chi', String(item.description), Number(item.amount), item.has_receipt ? 'Có' : 'Không', item.category || '', item.paid_by || '', item.notes || '']);
   sheet.addRow([]); sheet.addRow(['Tổng thu trong kỳ', Number(summary.income || 0)]); sheet.addRow(['Tổng chi trong kỳ', Number(summary.expense || 0)]); sheet.addRow(['Thu trừ chi trong kỳ', Number(summary.balance || 0)]); sheet.addRow(['Còn lại đến cuối kỳ', Number(summary.remaining || 0)]);
   sheet.columns.forEach((c) => { c.width = 24; }); sheet.getColumn(3).width = 50;
   const changes = book.addWorksheet('Dieu chinh quy');
   changes.addRow(['Ngày điều chỉnh', 'Thành viên', 'Đội', 'Tháng quỹ', 'Trạng thái cũ', 'Trạng thái mới', 'Số tiền', 'Lý do']);
   changes.getRow(1).font = { bold: true };
   const labels = { unpaid: 'Chưa đóng', paid: 'Đã đóng', exempt: 'Miễn đóng' };
-  for (const a of adjustments) changes.addRow([a.created_at, a.player_name, a.team_name, a.month, labels[a.old_status] || a.old_status, labels[a.new_status] || a.new_status, Number(a.amount), a.reason]);
+  for (const a of adjustments) changes.addRow([formatVietnamDateTime(a.created_at), a.player_name, a.team_name, a.month, labels[a.old_status] || a.old_status, labels[a.new_status] || a.new_status, Number(a.amount), a.reason]);
   changes.columns.forEach((c) => { c.width = 24; }); changes.getColumn(8).width = 45;
   await download(book, 'so-thu-chi.xlsx');
 }
@@ -86,7 +92,7 @@ export async function buildMembersWorkbook(items, teamId = '') {
   sheet.getRow(1).font = { bold: true };
   for (const item of items) {
     const team = (item.teams || []).find((t) => String(t.id) === String(teamId));
-    sheet.addRow([item.full_name, item.date_of_birth, item.phone, item.email, ...(teamId ? [team?.position, team?.jersey_number ?? ''] : [(item.teams || []).map((t) => t.name).join(', ')]), item.preferred_foot, item.status, item.notes].map((value) => value == null ? '' : String(value)));
+    sheet.addRow([item.full_name, formatDate(item.date_of_birth), item.phone, item.email, ...(teamId ? [team?.position, team?.jersey_number ?? ''] : [(item.teams || []).map((t) => t.name).join(', ')]), item.preferred_foot, item.status, item.notes].map((value) => value == null ? '' : String(value)));
   }
   sheet.columns.forEach((column) => { column.width = 24; });
   sheet.getColumn(teamId ? 9 : 8).width = 45;

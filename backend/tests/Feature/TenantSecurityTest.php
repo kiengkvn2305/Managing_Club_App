@@ -12,6 +12,18 @@ class TenantSecurityTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_member_search_notes_and_sort_by_given_name_in_both_directions(): void
+    {
+        [, $club] = $this->club();
+        $first = $this->player($club, ['full_name' => 'Nguyen Van An', 'notes' => 'thuan chan trai']);
+        $second = $this->player($club, ['full_name' => 'Le Van Binh']);
+        $third = $this->player($club, ['full_name' => 'Tran Van Chi']);
+        $url = "/api/v1/clubs/$club/members";
+        $this->getJson("$url?q=chan%20trai")->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $first);
+        $this->getJson("$url?sort=full_name&direction=asc")->assertOk()->assertJsonPath('data.0.id', $first)->assertJsonPath('data.1.id', $second)->assertJsonPath('data.2.id', $third);
+        $this->getJson("$url?sort=full_name&direction=desc")->assertOk()->assertJsonPath('data.0.id', $third)->assertJsonPath('data.2.id', $first);
+    }
+
     private function club(): array
     {
         $owner = User::factory()->create();
@@ -42,9 +54,11 @@ class TenantSecurityTest extends TestCase
     {
         [, $club] = $this->club();
         $team = $this->team($club);
+        $this->getJson("/api/v1/clubs/$club/teams")->assertOk()->assertJsonPath('data.0.members_count', 0);
         $first = $this->player($club, ['full_name' => 'An', 'date_of_birth' => '2000-01-01', 'position' => 'ST']);
         $second = $this->player($club, ['full_name' => 'Binh', 'date_of_birth' => '1990-01-01', 'position' => 'GK']);
         $this->patchJson("/api/v1/clubs/$club/teams/$team/players", ['player_ids' => [$first, $second]])->assertNoContent();
+        $this->getJson("/api/v1/clubs/$club/teams")->assertOk()->assertJsonPath('data.0.members_count', 2);
         $this->patchJson("/api/v1/clubs/$club/teams/$team/players/$first/position", ['position' => 'GK'])->assertNoContent();
         $this->patchJson("/api/v1/clubs/$club/teams/$team/players/$second/position", ['position' => 'ST'])->assertNoContent();
         $this->getJson("/api/v1/clubs/$club/members?team_id=$team&sort=position&per_page=1&page=1")->assertOk()->assertJsonPath('data.0.id', $first);

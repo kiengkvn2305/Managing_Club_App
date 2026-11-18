@@ -84,6 +84,7 @@ class TeamDuesController extends Controller
             $amount = $service->amount($club->id, $team->id, $player->id, $month);
             if ($amount === null && ! $entry) continue;
             $rows[$player->id] ??= ['player_id' => $player->id, 'name' => $player->full_name, 'date_of_birth' => $player->date_of_birth?->format('Y-m-d'), 'email' => $player->email, 'teams' => [], 'total' => 0, 'debt' => 0];
+            if ($request->user()->can('viewRoster', $club)) $rows[$player->id]['notes'] = $player->notes;
             $amount = $entry ? (int) $entry->amount : $amount;
             $status = $entry->status ?? ($amount > 0 ? ($month <= CarbonImmutable::now('Asia/Ho_Chi_Minh')->startOfMonth()->toDateString() ? 'debt' : 'pending') : 'none');
             $summary = $summaries[$team->id][$player->id] ?? ['debt' => 0, 'months' => 0];

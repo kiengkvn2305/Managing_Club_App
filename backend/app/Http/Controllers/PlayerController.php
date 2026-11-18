@@ -55,11 +55,11 @@ class PlayerController extends Controller
     {
         $club = $request->attributes->get('club');
         Gate::authorize('viewRoster', $club);
-        $filters = $request->validate(['q' => ['nullable', 'string', 'max:120'], 'team_id' => ['nullable', 'integer'], 'status' => ['nullable', Rule::in(['active', 'inactive', 'injured'])], 'per_page' => ['nullable', 'integer', 'between:1,100'], 'page' => ['nullable', 'integer', 'min:1'], 'sort' => ['nullable', Rule::in(['full_name', 'created_at', 'jersey_number', 'date_of_birth', 'position'])]]);
+        $filters = $request->validate(['q' => ['nullable', 'string', 'max:120'], 'team_id' => ['nullable', 'integer'], 'status' => ['nullable', Rule::in(['active', 'inactive', 'injured'])], 'per_page' => ['nullable', 'integer', 'between:1,100'], 'page' => ['nullable', 'integer', 'min:1'], 'direction' => ['nullable', Rule::in(['asc', 'desc'])], 'sort' => ['nullable', Rule::in(['full_name', 'created_at', 'jersey_number', 'date_of_birth', 'position'])]]);
         $query = $club->players()->with(['team', 'teams', 'user']);
         if (! empty($filters['q'])) {
             $term = '%'.addcslashes($filters['q'], '%_\\').'%';
-            $query->where(fn ($q) => $q->where('full_name', 'like', $term)->orWhere('email', 'like', $term)->orWhere('phone', 'like', $term));
+            $query->where(fn ($q) => $q->where('full_name', 'like', $term)->orWhere('email', 'like', $term)->orWhere('phone', 'like', $term)->orWhere('notes', 'like', $term));
         }
         if (! empty($filters['team_id'])) {
             $query->whereHas('teams', fn ($q) => $q->where('teams.id', $filters['team_id']));
@@ -76,10 +76,19 @@ class PlayerController extends Controller
         }
 
         $sort = $filters['sort'] ?? 'full_name';
+        $direction = $filters['direction'] ?? ($sort === 'created_at' ? 'desc' : 'asc');
         if ($sort === 'position' && ! empty($filters['team_id'])) {
-            $query->orderBy(DB::table('team_players')->select('position')->whereColumn('team_players.player_id', 'player_profiles.id')->where('team_players.club_id', $club->id)->where('team_players.team_id', $filters['team_id'])->limit(1));
+            $query->orderBy(DB::table('team_players')->select('position')->whereColumn('team_players.player_id', 'player_profiles.id')->where('team_players.club_id', $club->id)->where('team_players.team_id', $filters['team_id'])->limit(1), $direction);
+        } elseif ($sort === 'full_name') {
+            if (DB::connection()->getDriverName() === 'sqlite') {
+                DB::connection()->getPdo()->sqliteCreateFunction('fcms_given_name', function ($name) { $parts = preg_split('/\s+/u', trim($name ?? '')); return end($parts) ?: ''; }, 1);
+                $query->orderByRaw('fcms_given_name(player_profiles.full_name) '.$direction);
+            } else {
+                $query->orderByRaw("SUBSTRING_INDEX(TRIM(player_profiles.full_name), ' ', -1) ".$direction);
+            }
+            $query->orderBy('full_name', $direction);
         } else {
-            $query->orderBy($sort, $sort === 'created_at' ? 'desc' : 'asc');
+            $query->orderBy($sort, $direction);
         }
         return PlayerResource::collection($query->orderBy('full_name')->orderBy('id')->paginate($filters['per_page'] ?? 15)->withQueryString());
     }
@@ -138,6 +147,7 @@ class PlayerController extends Controller
         $avatarPath = DB::transaction(function () use ($tenant, $member, $request, $audit) {
             DB::table('clubs')->where('id', $tenant->id)->lockForUpdate()->first();
             $player = $tenant->players()->whereKey($member)->lockForUpdate()->firstOrFail();
+            if (DB::table('board_tasks')->join('club_board_members', 'club_board_members.id', '=', 'board_tasks.board_member_id')->where('board_tasks.club_id', $tenant->id)->where('club_board_members.club_id', $tenant->id)->where('club_board_members.player_id', $member)->exists()) throw ValidationException::withMessages(['member' => ['Không thể xóa thành viên BCN đang có công việc.']]);
             if (DB::table('inventory_assignments')->where('club_id', $tenant->id)->where('player_id', $member)->exists()) throw ValidationException::withMessages(['member' => ['Không thể xóa thành viên có lịch sử cấp phát trang bị.']]);
             if (DB::table('match_attendances')->where('club_id', $tenant->id)->where('player_id', $member)->exists()) throw ValidationException::withMessages(['member' => ['Không thể xóa thành viên có lịch sử điểm danh trận đấu.']]);
             if (DB::table('player_match_stats')->where('club_id', $tenant->id)->where('player_id', $member)->exists()) throw ValidationException::withMessages(['member' => ['Không thể xóa thành viên có thống kê trận đấu.']]);

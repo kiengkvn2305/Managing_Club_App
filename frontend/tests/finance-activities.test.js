@@ -16,4 +16,7 @@ test('birthdays show only the current month and paginate three at a time', () =>
   Object.assign(state, { loading: false, error: '', route: 'activities', birthdayPage: 1, clubs: [{ id: 1, membership_role: 'owner', can_manage_activities: true }], clubId: 1, activities: { celebrations: [], trainings: [], awards: [], birthdays: [...['An','Binh','Chi','Dung'].map((name, i) => ({ id: i + 1, name, date_of_birth: `2000-${month}-0${i + 1}` })), { id: 5, name: 'KhacThang', date_of_birth: `2000-${other}-01` }] } });
   const first = page(); assert.match(first, /An/); assert.match(first, /Chi/); assert.doesNotMatch(first, /Dung/); assert.doesNotMatch(first, /KhacThang/); assert.match(first, /1 \/ 2/);
   state.birthdayPage = 2; const second = page(); assert.match(second, /Dung/); assert.doesNotMatch(second, /KhacThang/); assert.match(second, /2 \/ 2/);
+  state.birthdayMonth = other; state.birthdayPage = 1;
+  const selected = page(); assert.match(selected, /KhacThang/); assert.doesNotMatch(selected, />Dung</); assert.match(selected, /data-birthday-month/);
+  state.birthdayMonth = '';
 });

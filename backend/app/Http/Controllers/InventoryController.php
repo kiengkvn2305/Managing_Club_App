@@ -101,12 +101,21 @@ class InventoryController extends Controller
     public function candidates(Request $request): mixed
     {
         $club = $request->attributes->get('club'); Gate::authorize('manageInventory', $club);
-        $data = $request->validate(['search' => ['nullable', 'string', 'max:100']]);
+        $data = $request->validate(['search' => ['nullable', 'string', 'max:100'], 'direction' => ['nullable', 'in:asc,desc']]);
         $columns = ['id', 'full_name'];
-        if ($request->user()->can('viewRoster', $club)) $columns = array_merge($columns, ['date_of_birth', 'email']);
+        $canViewRoster = $request->user()->can('viewRoster', $club);
+        if ($canViewRoster) $columns = array_merge($columns, ['date_of_birth', 'email']);
+        $direction = $data['direction'] ?? 'asc';
         $players = DB::table('player_profiles')->where('club_id', $club->id)
-            ->when($data['search'] ?? null, fn ($q, $search) => $q->where('full_name', 'like', '%'.str_replace(['%', '_'], ['\\%', '\\_'], $search).'%'))
-            ->orderBy('full_name')->orderBy('id')->select($columns)->paginate(50);
+            ->when($data['search'] ?? null, function ($query, $search) use ($canViewRoster) {
+                $term = '%'.addcslashes($search, '%_\\').'%';
+                $query->where(function ($q) use ($term, $canViewRoster) { $q->where('full_name', 'like', $term); if ($canViewRoster) $q->orWhere('notes', 'like', $term); });
+            });
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            DB::connection()->getPdo()->sqliteCreateFunction('fcms_given_name', function ($name) { $parts = preg_split('/\s+/u', trim($name ?? '')); return end($parts) ?: ''; }, 1);
+            $players->orderByRaw('fcms_given_name(full_name) '.$direction);
+        } else $players->orderByRaw("SUBSTRING_INDEX(TRIM(full_name), ' ', -1) ".$direction);
+        $players = $players->orderBy('full_name', $direction)->orderBy('id')->select($columns)->paginate(50);
         $teams = DB::table('team_players')->join('teams', function ($join) { $join->on('teams.id', '=', 'team_players.team_id')->on('teams.club_id', '=', 'team_players.club_id'); })
             ->where('team_players.club_id', $club->id)->whereIn('team_players.player_id', $players->getCollection()->pluck('id'))
             ->select('team_players.player_id', 'team_players.jersey_number', 'teams.name')->orderBy('teams.name')->get()->groupBy('player_id');
