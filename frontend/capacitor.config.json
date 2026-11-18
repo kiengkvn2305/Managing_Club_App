@@ -1,0 +1,8 @@
+{
+  "appId": "vn.fcms.pro",
+  "appName": "FCMS PRO",
+  "webDir": "dist",
+  "plugins": {
+    "SplashScreen": { "launchAutoHide": true, "backgroundColor": "#091b30" }
+  }
+}

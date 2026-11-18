@@ -1,0 +1,7 @@
+vendor
+.env
+node_modules
+database/*.sqlite*
+storage/logs/*
+storage/framework/sessions/*
+bootstrap/cache/*.php

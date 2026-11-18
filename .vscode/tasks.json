@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "FCMS: development",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/dev.mjs"],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "FCMS: build frontend",
+      "type": "shell",
+      "command": "npm",
+      "args": ["--prefix", "frontend", "run", "build"],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

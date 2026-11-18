@@ -1,0 +1,15 @@
+{
+  "name": "fcms-pro",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "test": "node scripts/test.mjs",
+    "setup": "node scripts/setup.mjs",
+    "dev": "node scripts/dev.mjs",
+    "test:frontend": "npm --prefix frontend test",
+    "test:launcher": "node --test scripts/start.test.mjs",
+    "build": "npm --prefix frontend run build"
+  }
+}

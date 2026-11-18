@@ -1,0 +1,14 @@
+.tools/
+.npm-cache/
+**/node_modules/
+**/vendor/
+**/dist/
+**/.env
+!**/.env.example
+**/*.sqlite*
+**/coverage/
+**/.phpunit.result.cache
+test-results/
+playwright-report/
+.DS_Store
+Thumbs.db
