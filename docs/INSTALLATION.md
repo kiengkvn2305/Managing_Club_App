@@ -1,5 +1,7 @@
 # Cài đặt
 
+Để khôi phục mật khẩu qua email, cấu hình `FRONTEND_URL` là địa chỉ ứng dụng frontend đáng tin cậy và cấu hình mail thực tế trong môi trường backend. `MAIL_MAILER=log` chỉ ghi thư vào log của máy chủ, không gửi đến hộp thư; không ghi thông tin đăng nhập SMTP vào repository.
+
 Node 22.12+ (khuyến nghị 24 LTS), PHP 8.2+ (Docker đích 8.4), Composer 2. Extensions: curl/ctype/dom/fileinfo/filter/hash/mbstring/openssl/PDO/pdo_mysql/pdo_sqlite/session/tokenizer/xml/xmlwriter/zip/bcmath. Không cần cài PHP system nếu có XAMPP; đặt PHP_BIN nếu cần.
 
 ## Chạy nhanh, không cần bật database server

@@ -10,6 +10,26 @@ class ActivityTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_vice_proposals_require_owner_approval_and_only_owner_changes_activities(): void
+    {
+        $owner = User::factory()->create(); $this->actingAs($owner);
+        $club = $this->postJson('/api/v1/clubs', ['name' => 'CLB', 'format' => '5'])->assertCreated()->json('data.id');
+        $team = $this->postJson("/api/v1/clubs/$club/teams", ['name' => 'Đội', 'format' => '5'])->assertCreated()->json('data.id');
+        $vice = User::factory()->create();
+        DB::table('club_members')->insert(['club_id' => $club, 'user_id' => $vice->id, 'role' => 'member', 'title' => 'Phó chủ nhiệm CLB', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $this->actingAs($vice);
+        $training = $this->postJson("/api/v1/clubs/$club/activities/trainings", ['team_id' => $team, 'training_date' => '2027-02-01', 'training_time' => '18:30', 'location' => 'Sân'])->assertCreated()->json('data.id');
+        $this->getJson("/api/v1/clubs/$club/activities")->assertJsonPath('data.trainings.0.approval_status', 'pending');
+        $this->patchJson("/api/v1/clubs/$club/activities/trainings/$training/approve", [])->assertForbidden();
+        $this->deleteJson("/api/v1/clubs/$club/activities/trainings/$training")->assertForbidden();
+        $this->actingAs($owner);
+        $this->patchJson("/api/v1/clubs/$club/activities/trainings/$training/approve", [])->assertNoContent();
+        $this->patchJson("/api/v1/clubs/$club/activities/trainings/$training", ['training_date' => '2027-02-02', 'training_time' => '18:30', 'location' => 'Sân', 'training_status' => 'postponed'])->assertNoContent();
+        $this->getJson("/api/v1/clubs/$club/activities")->assertJsonPath('data.trainings.0.training_status', 'postponed');
+        $this->patchJson("/api/v1/clubs/$club/activities/trainings/$training/attendance", ['players' => []])->assertUnprocessable();
+        $this->deleteJson("/api/v1/clubs/$club/activities/trainings/$training")->assertNoContent();
+    }
+
     public function test_activities_attendance_and_historical_snapshots(): void
     {
         $owner = User::factory()->create(); $this->actingAs($owner);

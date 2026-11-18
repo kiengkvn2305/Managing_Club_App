@@ -7,6 +7,9 @@ use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -58,6 +61,17 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
+        return response()->noContent();
+    }
+
+    public function changePassword(AuthRequest $request): mixed
+    {
+        $user = $request->user();
+        DB::transaction(function () use ($user, $request) {
+            $user->forceFill(['password' => Hash::make($request->validated('password')), 'remember_token' => Str::random(60)])->save();
+            if (config('session.driver') === 'database') DB::connection(config('session.connection'))->table(config('session.table', 'sessions'))->where('user_id', $user->id)->where('id', '!=', $request->session()->getId())->delete();
+        });
+        $request->session()->regenerate();
         return response()->noContent();
     }
 

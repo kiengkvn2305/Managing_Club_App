@@ -10,9 +10,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Club extends Model
 {
     use SoftDeletes;
-    protected $fillable = ['name', 'slug', 'description', 'city', 'home_ground', 'format', 'formats', 'status'];
+    protected $fillable = ['name', 'slug', 'description', 'city', 'home_ground', 'format', 'formats', 'status', 'is_discoverable'];
 
-    protected function casts(): array { return ['formats' => 'array']; }
+    protected function casts(): array { return ['formats' => 'array', 'is_discoverable' => 'boolean']; }
 
     public function memberships(): HasMany
     {

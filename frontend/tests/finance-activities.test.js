@@ -1,0 +1,19 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { state } from '../src/state.js';
+import { financePage } from '../src/finance-page.js';
+import { page } from '../src/pages.js';
+
+test('finance shows remaining, period comparison and correction history', () => {
+  Object.assign(state, { clubs: [{ id: 1, membership_role: 'owner', can_view_finance: true }], clubId: 1, financePeriod: 'month', financeMonth: '2026-02', financeYear: '2026', finance: { summary: { income: 40, expense: 10, balance: 30, remaining: 180, change: -20 }, meta: {}, data: [], chart: [{ period: '2026-02-10', type: 'income', total: 40 }], adjustments: { data: [{ created_at: '2026-02-11', player_name: 'An', team_name: 'A', month: '2026-02-01', old_status: 'paid', new_status: 'unpaid', amount: 10, reason: 'Ghi nhầm' }], meta: {} } } });
+  const html = financePage();
+  assert.match(html, /Còn lại đến cuối kỳ/); assert.match(html, /180 đ/); assert.match(html, /-20 đ/);
+  assert.match(html, /Đã đóng → Chưa đóng/); assert.match(html, /Ghi nhầm/); assert.match(html, /2026-02-10/);
+});
+
+test('birthdays show only the current month and paginate three at a time', () => {
+  const month = String(new Date().getMonth() + 1).padStart(2, '0'), other = String(new Date().getMonth() === 0 ? 12 : new Date().getMonth()).padStart(2, '0');
+  Object.assign(state, { loading: false, error: '', route: 'activities', birthdayPage: 1, clubs: [{ id: 1, membership_role: 'owner', can_manage_activities: true }], clubId: 1, activities: { celebrations: [], trainings: [], awards: [], birthdays: [...['An','Binh','Chi','Dung'].map((name, i) => ({ id: i + 1, name, date_of_birth: `2000-${month}-0${i + 1}` })), { id: 5, name: 'KhacThang', date_of_birth: `2000-${other}-01` }] } });
+  const first = page(); assert.match(first, /An/); assert.match(first, /Chi/); assert.doesNotMatch(first, /Dung/); assert.doesNotMatch(first, /KhacThang/); assert.match(first, /1 \/ 2/);
+  state.birthdayPage = 2; const second = page(); assert.match(second, /Dung/); assert.doesNotMatch(second, /KhacThang/); assert.match(second, /2 \/ 2/);
+});

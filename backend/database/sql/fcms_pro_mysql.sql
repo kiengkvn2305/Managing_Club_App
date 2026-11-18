@@ -389,3 +389,441 @@ alter table `club_awards` add constraint `club_awards_club_id_foreign` foreign k
 
 insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000009_club_activities', 1);
 
+-- 2026_11_18_000010_create_team_dues
+create table `team_dues_rates` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `team_id` bigint unsigned not null,
+  `effective_month` date not null,
+  `amount` bigint unsigned not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `team_dues_rates` add unique `team_dues_rates_team_id_effective_month_unique`(`team_id`, `effective_month`);
+
+create table `team_membership_periods` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `team_id` bigint unsigned not null,
+  `player_id` bigint unsigned not null,
+  `joined_on` date not null,
+  `left_on` date null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `team_membership_periods` add index `team_membership_periods_club_id_team_id_player_id_index`(`club_id`, `team_id`, `player_id`);
+
+create table `team_dues_entries` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `team_id` bigint unsigned not null,
+  `player_id` bigint unsigned not null,
+  `month` date not null,
+  `status` varchar(10) not null,
+  `amount` bigint unsigned not null,
+  `finance_transaction_id` bigint unsigned null,
+  `created_by` bigint unsigned not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `team_dues_entries` add unique `team_dues_entries_team_id_player_id_month_unique`(`team_id`, `player_id`, `month`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000010_create_team_dues', 1);
+
+-- 2026_11_18_000011_activity_approvals
+alter table `club_celebrations` add `approval_status` varchar(16) not null default 'approved';
+
+alter table `club_celebrations` add `submitted_by` bigint unsigned null;
+
+alter table `team_trainings` add `approval_status` varchar(16) not null default 'approved';
+
+alter table `team_trainings` add `submitted_by` bigint unsigned null;
+
+alter table `club_awards` add `approval_status` varchar(16) not null default 'approved';
+
+alter table `club_awards` add `submitted_by` bigint unsigned null;
+
+alter table `team_trainings` add `training_status` varchar(16) not null default 'scheduled';
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000011_activity_approvals', 1);
+
+-- 2026_11_18_000012_dues_adjustments
+create table `team_dues_adjustments` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `team_id` bigint unsigned not null,
+  `player_id` bigint unsigned not null,
+  `month` date not null,
+  `old_status` varchar(10) not null,
+  `new_status` varchar(10) not null,
+  `amount` bigint unsigned not null,
+  `old_transaction_id` bigint unsigned null,
+  `new_transaction_id` bigint unsigned null,
+  `reason` varchar(255) not null,
+  `created_by` bigint unsigned not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `team_dues_adjustments` add index `team_dues_adjustments_club_id_team_id_player_id_month_index`(`club_id`, `team_id`, `player_id`, `month`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000012_dues_adjustments', 1);
+
+-- 2026_11_18_000013_add_profile_images
+alter table `clubs` add `avatar_path` varchar(255) null;
+
+alter table `clubs` add `background_path` varchar(255) null;
+
+alter table `player_profiles` add `avatar_path` varchar(255) null;
+
+alter table `users` add `avatar_path` varchar(255) null;
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000013_add_profile_images', 1);
+
+-- 2026_11_18_000014_create_planned_expenses
+create table `planned_expenses` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `description` varchar(255) not null,
+  `amount` bigint unsigned null,
+  `notes` text null,
+  `effective_from` date not null,
+  `effective_to` date null,
+  `cancelled` tinyint(1) not null default '0',
+  `created_by` bigint unsigned not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `planned_expenses` add constraint `planned_expenses_club_id_foreign` foreign key (`club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `planned_expenses` add constraint `planned_expenses_created_by_foreign` foreign key (`created_by`) references `users` (`id`) on delete restrict;
+
+alter table `planned_expenses` add index `planned_expenses_club_id_effective_from_effective_to_index`(`club_id`, `effective_from`, `effective_to`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000014_create_planned_expenses', 1);
+
+-- 2026_11_18_000015_club_discovery_friendlies
+alter table `clubs` add `is_discoverable` tinyint(1) not null default '0';
+
+create table `friendly_invitations` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `source_club_id` bigint unsigned not null,
+  `target_club_id` bigint unsigned not null,
+  `pair_key` varchar(64) not null,
+  `pending_key` varchar(10) null,
+  `status` varchar(16) not null,
+  `match_date` date not null,
+  `match_time` varchar(5) null,
+  `location` varchar(160) null,
+  `message` text null,
+  `created_by` bigint unsigned not null,
+  `responded_by` bigint unsigned null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `friendly_invitations` add constraint `friendly_invitations_source_club_id_foreign` foreign key (`source_club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `friendly_invitations` add constraint `friendly_invitations_target_club_id_foreign` foreign key (`target_club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `friendly_invitations` add constraint `friendly_invitations_created_by_foreign` foreign key (`created_by`) references `users` (`id`) on delete restrict;
+
+alter table `friendly_invitations` add constraint `friendly_invitations_responded_by_foreign` foreign key (`responded_by`) references `users` (`id`) on delete restrict;
+
+alter table `friendly_invitations` add unique `friendly_invitations_pair_key_pending_key_unique`(`pair_key`, `pending_key`);
+
+alter table `friendly_invitations` add index `friendly_invitations_source_club_id_status_index`(`source_club_id`, `status`);
+
+alter table `friendly_invitations` add index `friendly_invitations_target_club_id_status_index`(`target_club_id`, `status`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000015_club_discovery_friendlies', 1);
+
+-- 2026_11_18_000016_create_club_matches
+create table `club_matches` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `team_id` bigint unsigned null,
+  `friendly_invitation_id` bigint unsigned null,
+  `opponent` varchar(120) not null,
+  `match_date` date not null,
+  `start_time` varchar(5) not null,
+  `end_time` varchar(5) null,
+  `location` varchar(160) null,
+  `match_type` varchar(16) not null,
+  `status` varchar(16) not null,
+  `our_score` smallint unsigned null,
+  `opponent_score` smallint unsigned null,
+  `notes` text null,
+  `created_by` bigint unsigned not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `club_matches` add constraint `club_matches_club_id_foreign` foreign key (`club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `club_matches` add constraint `club_matches_club_id_team_id_foreign` foreign key (`club_id`, `team_id`) references `teams` (`club_id`, `id`) on delete restrict;
+
+alter table `club_matches` add constraint `club_matches_friendly_invitation_id_foreign` foreign key (`friendly_invitation_id`) references `friendly_invitations` (`id`) on delete restrict;
+
+alter table `club_matches` add constraint `club_matches_created_by_foreign` foreign key (`created_by`) references `users` (`id`) on delete restrict;
+
+alter table `club_matches` add unique `club_matches_club_id_friendly_invitation_id_unique`(`club_id`, `friendly_invitation_id`);
+
+alter table `club_matches` add index `club_matches_club_id_match_date_index`(`club_id`, `match_date`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000016_create_club_matches', 1);
+
+-- 2026_11_18_000017_create_inventory
+create table `inventory_items` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `name` varchar(255) not null,
+  `category` varchar(100) null,
+  `unit` varchar(30) not null default 'cái',
+  `kind` varchar(20) not null default 'consumable',
+  `quantity` int unsigned not null default '0',
+  `low_stock_threshold` int unsigned not null default '0',
+  `notes` text null,
+  `archived` tinyint(1) not null default '0',
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `inventory_items` add constraint `inventory_items_club_id_foreign` foreign key (`club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `inventory_items` add unique `inventory_items_club_id_id_unique`(`club_id`, `id`);
+
+alter table `inventory_items` add index `inventory_items_club_id_archived_name_index`(`club_id`, `archived`, `name`);
+
+create table `inventory_movements` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `inventory_item_id` bigint unsigned not null,
+  `actor_id` bigint unsigned not null,
+  `type` varchar(20) not null,
+  `change` int not null,
+  `balance_after` int unsigned not null,
+  `reason` varchar(500) not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `inventory_movements` add constraint `inventory_movements_club_id_foreign` foreign key (`club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `inventory_movements` add constraint `inventory_movements_inventory_item_id_foreign` foreign key (`inventory_item_id`) references `inventory_items` (`id`) on delete restrict;
+
+alter table `inventory_movements` add constraint `inventory_movements_actor_id_foreign` foreign key (`actor_id`) references `users` (`id`) on delete restrict;
+
+alter table `inventory_movements` add constraint `inventory_movements_club_id_inventory_item_id_foreign` foreign key (`club_id`, `inventory_item_id`) references `inventory_items` (`club_id`, `id`) on delete restrict;
+
+alter table `inventory_movements` add index `inventory_movements_club_id_inventory_item_id_id_index`(`club_id`, `inventory_item_id`, `id`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000017_create_inventory', 1);
+
+-- 2026_11_18_000018_inventory_assignments
+alter table `player_profiles` add unique `player_profiles_club_id_id_unique`(`club_id`, `id`);
+
+create table `inventory_assignments` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `inventory_item_id` bigint unsigned not null,
+  `player_id` bigint unsigned not null,
+  `player_name` varchar(120) not null,
+  `quantity` int unsigned not null,
+  `remaining` int unsigned not null,
+  `actor_id` bigint unsigned not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `inventory_assignments` add constraint `inventory_assignments_club_id_foreign` foreign key (`club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `inventory_assignments` add constraint `inventory_assignments_actor_id_foreign` foreign key (`actor_id`) references `users` (`id`) on delete restrict;
+
+alter table `inventory_assignments` add unique `inventory_assignments_club_id_inventory_item_id_id_unique`(`club_id`, `inventory_item_id`, `id`);
+
+alter table `inventory_assignments` add constraint `inventory_assignments_club_id_inventory_item_id_foreign` foreign key (`club_id`, `inventory_item_id`) references `inventory_items` (`club_id`, `id`) on delete restrict;
+
+alter table `inventory_assignments` add constraint `inventory_assignments_club_id_player_id_foreign` foreign key (`club_id`, `player_id`) references `player_profiles` (`club_id`, `id`) on delete restrict;
+
+alter table `inventory_assignments` add index `inventory_assignments_club_id_player_id_index`(`club_id`, `player_id`);
+
+alter table `inventory_movements` add `inventory_assignment_id` bigint unsigned null;
+
+alter table `inventory_movements` add constraint `inventory_movement_assignment_fk` foreign key (`club_id`, `inventory_item_id`, `inventory_assignment_id`) references `inventory_assignments` (`club_id`, `inventory_item_id`, `id`) on delete restrict;
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000018_inventory_assignments', 1);
+
+-- 2026_11_18_000019_match_attendance
+alter table `club_matches` add unique `club_matches_club_id_id_unique`(`club_id`, `id`);
+
+create table `match_attendances` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `match_id` bigint unsigned not null,
+  `player_id` bigint unsigned not null,
+  `rsvp` varchar(12) not null default 'pending',
+  `attendance` varchar(12) not null default 'unmarked',
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `match_attendances` add constraint `match_attendances_club_id_foreign` foreign key (`club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `match_attendances` add constraint `match_attendances_club_id_match_id_foreign` foreign key (`club_id`, `match_id`) references `club_matches` (`club_id`, `id`) on delete restrict;
+
+alter table `match_attendances` add constraint `match_attendances_club_id_player_id_foreign` foreign key (`club_id`, `player_id`) references `player_profiles` (`club_id`, `id`) on delete restrict;
+
+alter table `match_attendances` add unique `match_attendances_match_id_player_id_unique`(`match_id`, `player_id`);
+
+alter table `match_attendances` add index `match_attendances_club_id_match_id_index`(`club_id`, `match_id`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000019_match_attendance', 1);
+
+-- 2026_11_18_000020_create_club_polls
+create table `club_polls` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `created_by` bigint unsigned not null,
+  `title` varchar(200) not null,
+  `description` text null,
+  `deadline` timestamp not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `club_polls` add constraint `club_polls_club_id_foreign` foreign key (`club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `club_polls` add constraint `club_polls_created_by_foreign` foreign key (`created_by`) references `users` (`id`) on delete restrict;
+
+alter table `club_polls` add unique `club_polls_club_id_id_unique`(`club_id`, `id`);
+
+create table `club_poll_options` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `poll_id` bigint unsigned not null,
+  `label` varchar(200) not null,
+  `sort_order` int unsigned not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `club_poll_options` add constraint `club_poll_options_club_id_poll_id_foreign` foreign key (`club_id`, `poll_id`) references `club_polls` (`club_id`, `id`) on delete restrict;
+
+alter table `club_poll_options` add unique `club_poll_options_club_id_poll_id_id_unique`(`club_id`, `poll_id`, `id`);
+
+create table `club_poll_electors` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `poll_id` bigint unsigned not null,
+  `user_id` bigint unsigned not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `club_poll_electors` add constraint `club_poll_electors_user_id_foreign` foreign key (`user_id`) references `users` (`id`) on delete restrict;
+
+alter table `club_poll_electors` add constraint `club_poll_electors_club_id_poll_id_foreign` foreign key (`club_id`, `poll_id`) references `club_polls` (`club_id`, `id`) on delete restrict;
+
+alter table `club_poll_electors` add unique `club_poll_electors_club_id_poll_id_user_id_unique`(`club_id`, `poll_id`, `user_id`);
+
+create table `club_poll_votes` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `poll_id` bigint unsigned not null,
+  `user_id` bigint unsigned not null,
+  `option_id` bigint unsigned not null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `club_poll_votes` add constraint `club_poll_votes_club_id_poll_id_user_id_foreign` foreign key (`club_id`, `poll_id`, `user_id`) references `club_poll_electors` (`club_id`, `poll_id`, `user_id`) on delete restrict;
+
+alter table `club_poll_votes` add constraint `club_poll_votes_club_id_poll_id_option_id_foreign` foreign key (`club_id`, `poll_id`, `option_id`) references `club_poll_options` (`club_id`, `poll_id`, `id`) on delete restrict;
+
+alter table `club_poll_votes` add unique `club_poll_votes_poll_id_user_id_unique`(`poll_id`, `user_id`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000020_create_club_polls', 1);
+
+-- 2026_11_18_000021_player_match_stats
+create table `player_match_stats` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `match_id` bigint unsigned not null,
+  `player_id` bigint unsigned not null,
+  `goals` smallint unsigned not null default '0',
+  `assists` smallint unsigned not null default '0',
+  `yellow_cards` tinyint unsigned not null default '0',
+  `red_cards` tinyint unsigned not null default '0',
+  `goals_conceded` smallint unsigned null,
+  `rating` decimal(3, 1) null,
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `player_match_stats` add constraint `player_match_stats_club_id_foreign` foreign key (`club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `player_match_stats` add constraint `player_match_stats_club_id_match_id_foreign` foreign key (`club_id`, `match_id`) references `club_matches` (`club_id`, `id`) on delete restrict;
+
+alter table `player_match_stats` add constraint `player_match_stats_club_id_player_id_foreign` foreign key (`club_id`, `player_id`) references `player_profiles` (`club_id`, `id`) on delete restrict;
+
+alter table `player_match_stats` add unique `player_match_stats_match_id_player_id_unique`(`match_id`, `player_id`);
+
+alter table `player_match_stats` add index `player_match_stats_club_id_player_id_index`(`club_id`, `player_id`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000021_player_match_stats', 1);
+
+-- 2026_11_18_000022_recruitment
+create table `recruitment_posts` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `title` varchar(255) not null,
+  `position` varchar(100) null,
+  `requirements` text null,
+  `deadline` date null,
+  `status` varchar(20) not null default 'draft',
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `recruitment_posts` add constraint `recruitment_posts_club_id_foreign` foreign key (`club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `recruitment_posts` add unique `recruitment_posts_club_id_id_unique`(`club_id`, `id`);
+
+alter table `recruitment_posts` add index `recruitment_posts_club_id_status_index`(`club_id`, `status`);
+
+create table `recruitment_applications` (
+  `id` bigint unsigned not null auto_increment primary key,
+  `club_id` bigint unsigned not null,
+  `post_id` bigint unsigned not null,
+  `full_name` varchar(255) not null,
+  `date_of_birth` date null,
+  `email` varchar(255) null,
+  `phone` varchar(30) null,
+  `notes` text null,
+  `status` varchar(20) not null default 'new',
+  `created_at` timestamp null,
+  `updated_at` timestamp null
+) default character set utf8mb4 collate 'utf8mb4_unicode_ci' engine = InnoDB;
+
+alter table `recruitment_applications` add constraint `recruitment_applications_club_id_foreign` foreign key (`club_id`) references `clubs` (`id`) on delete restrict;
+
+alter table `recruitment_applications` add constraint `recruitment_applications_club_id_post_id_foreign` foreign key (`club_id`, `post_id`) references `recruitment_posts` (`club_id`, `id`) on delete restrict;
+
+alter table `recruitment_applications` add index `recruitment_applications_club_id_post_id_status_index`(`club_id`, `post_id`, `status`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000022_recruitment', 1);
+
+-- 2026_11_18_000023_link_lineups_to_matches
+alter table `match_lineups` add `club_match_id` bigint unsigned null;
+
+alter table `match_lineups` add constraint `match_lineups_club_id_club_match_id_foreign` foreign key (`club_id`, `club_match_id`) references `club_matches` (`club_id`, `id`) on delete restrict;
+
+alter table `match_lineups` add unique `match_lineups_club_id_club_match_id_unique`(`club_id`, `club_match_id`);
+
+insert into `migrations` (`migration`, `batch`) values ('2026_11_18_000023_link_lineups_to_matches', 1);
+

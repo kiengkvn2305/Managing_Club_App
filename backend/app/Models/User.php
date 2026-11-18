@@ -40,7 +40,15 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $hidden = [
         'password',
         'remember_token',
+        'avatar_path',
     ];
+
+    protected $appends = ['avatar_version'];
+
+    public function getAvatarVersionAttribute(): ?string
+    {
+        return $this->avatar_path ? hash('sha256', $this->avatar_path) : null;
+    }
 
     /**
      * Get the attributes that should be cast.

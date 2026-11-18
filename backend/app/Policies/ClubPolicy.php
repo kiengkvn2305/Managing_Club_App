@@ -32,6 +32,24 @@ class ClubPolicy
     {
         return $club->roleFor($user)?->managesRoster() ?? false;
     }
+    public function viewInventory(User $user, Club $club): bool
+    {
+        return in_array($club->roleFor($user), [ClubRole::Owner, ClubRole::CoOwner, ClubRole::GeneralManager, ClubRole::Equipment], true);
+    }
+
+    public function manageInventory(User $user, Club $club): bool
+    {
+        return $club->status === 'active' && $this->viewInventory($user, $club);
+    }
+    public function viewActivities(User $user, Club $club): bool
+    {
+        return $this->viewRoster($user, $club) || $club->memberships()->where('user_id', $user->id)->where('status', 'active')->where('title', 'Phó chủ nhiệm CLB')->exists();
+    }
+
+    public function manageActivities(User $user, Club $club): bool
+    {
+        return $club->status === 'active' && $this->viewActivities($user, $club);
+    }
 
     public function manageRoster(User $user, Club $club): bool
     {

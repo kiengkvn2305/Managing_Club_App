@@ -1,0 +1,12 @@
+import { escapeHtml as e, number } from './utils.js';
+import { button, empty } from './components/ui.js';
+
+export const disciplineStatus = { open: 'Mới ghi nhận', reviewing: 'Đang xem xét', resolved: 'Đã quyết định', cancelled: 'Đã hủy' };
+
+export function disciplinePage({ discipline = {}, canManage = false, status = '' } = {}) {
+  const { data = [], current_page = 1, last_page = 1, total = 0 } = discipline;
+  return `<div class="page-top"><div><div class="eyebrow">QUẢN LÝ NHÂN SỰ</div><h1>Kỷ luật nội bộ</h1><p>Ghi nhận sự việc, quyết định và lịch sử xử lý riêng tư của CLB.</p></div><div class="page-actions">${canManage ? button('discipline-new', 'Ghi nhận sự việc') : ''}</div></div>
+  <section class="panel"><form class="filters" data-form="discipline-filter"><label>Trạng thái <select name="status"><option value="">Tất cả</option>${Object.entries(disciplineStatus).map(([value, label]) => `<option value="${value}" ${value === status ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button class="button secondary">Lọc</button></form>
+  <p>Tiền phạt chỉ là nội dung quyết định; chưa tạo công nợ hay khoản thu tự động.</p>
+  ${data.length ? `<div class="table-wrap"><table><thead><tr><th>Ngày</th><th>Thành viên</th><th>Sự việc</th><th>Trạng thái</th><th>Quyết định</th><th>Phạt dự kiến</th><th>Thao tác</th></tr></thead><tbody>${data.map((item) => `<tr><td>${e(item.incident_date)}</td><td>${e(item.player_name)}</td><td>${e(item.title)}</td><td>${e(disciplineStatus[item.status] || item.status)}</td><td>${e(item.decision || '—')}</td><td>${item.fine_amount == null ? '—' : `${number(item.fine_amount)} ₫`}</td><td><button class="text-button" data-action="discipline-history" data-id="${item.id}">Chi tiết / lịch sử</button>${canManage ? ` <button class="text-button" data-action="discipline-edit" data-id="${item.id}">Sửa</button>` : ''}</td></tr>`).join('')}</tbody></table></div><div class="table-footer"><span>${number(total)} sự việc</span><div><button class="icon-button" data-action="discipline-prev" aria-label="Trang trước" ${current_page <= 1 ? 'disabled' : ''}>←</button> ${current_page} / ${last_page} <button class="icon-button" data-action="discipline-next" aria-label="Trang sau" ${current_page >= last_page ? 'disabled' : ''}>→</button></div></div>` : empty('Chưa có sự việc phù hợp', 'Thêm sự việc hoặc thay đổi bộ lọc.')}</section>`;
+}

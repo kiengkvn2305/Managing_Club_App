@@ -11,6 +11,28 @@ class AuthSecurityTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_password_change_requires_current_password_and_valid_confirmation(): void
+    {
+        $user = User::factory()->create(['password' => Hash::make('CurrentPass123!')]);
+        $this->actingAs($user);
+        $url = '/api/v1/auth/password';
+        $this->patchJson($url, ['current_password' => 'wrong', 'password' => 'NewPassword123!', 'password_confirmation' => 'NewPassword123!'])->assertUnprocessable()->assertJsonValidationErrors('current_password');
+        $this->patchJson($url, ['current_password' => 'CurrentPass123!', 'password' => 'NewPassword123!', 'password_confirmation' => 'different'])->assertUnprocessable()->assertJsonValidationErrors('password');
+        $this->patchJson($url, ['current_password' => 'CurrentPass123!', 'password' => str_repeat('x', 73), 'password_confirmation' => str_repeat('x', 73)])->assertUnprocessable();
+        $this->assertTrue(Hash::check('CurrentPass123!', $user->fresh()->password));
+        $this->patchJson($url, ['current_password' => 'CurrentPass123!', 'password' => 'NewPassword123!', 'password_confirmation' => 'NewPassword123!'])->assertNoContent();
+        $this->assertTrue(Hash::check('NewPassword123!', $user->fresh()->password));
+        $this->getJson('/api/v1/auth/user')->assertOk()->assertJsonPath('data.id', $user->id);
+    }
+
+    public function test_old_password_fingerprint_invalidates_other_session(): void
+    {
+        $user = User::factory()->create(['password' => Hash::make('OldPassword123!')]);
+        $old = hash_hmac('sha256', $user->getAuthPassword(), (string) config('app.key'));
+        $user->forceFill(['password' => Hash::make('NewPassword123!')])->save();
+        $this->actingAs($user)->withSession(['auth_password_fingerprint' => $old])->getJson('/api/v1/auth/user')->assertUnauthorized();
+    }
+
     public function test_malformed_credentials_produce_validation_errors_instead_of_server_errors(): void
     {
         $this->postJson('/api/v1/auth/login', ['email' => ['invalid'], 'password' => ['invalid']])->assertUnprocessable();

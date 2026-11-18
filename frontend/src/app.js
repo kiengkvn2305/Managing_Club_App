@@ -2,9 +2,19 @@ import { createApiClient } from "./api.js";
 import { state as s, currentClub } from "./state.js";
 import { page, authPage, titles } from "./pages.js";
 import { openLineup, openCaptain } from "./lineups.js";
-import { downloadMemberTemplate, parseMembers, exportFinance } from "./spreadsheets.js";
+import { downloadMemberTemplate, parseMembers, exportFinance, exportMembers } from "./spreadsheets.js";
 import { reviewImport } from "./import-review.js";
 import { activityAction } from "./activities.js";
+import { avatar, imageUrl } from './images.js';
+import { setupImageCropper } from './image-crop.js';
+import { openMatch } from './matches.js';
+import { calendarRange } from './matches-page.js';
+import { passwordResetPage } from './password-reset-page.js';
+import { openInventoryItem, openInventoryMovement, showInventoryHistory, showInventoryAssignments } from './inventory.js';
+import { openMatchAttendance } from './match-attendance.js';
+import { openPlayerMatchStats, openPlayerStatsSummary } from './player-stats.js';
+import { openPollCreate, confirmPollVote } from './polls.js';
+import { openRecruitmentPost, showRecruitmentApplications } from './recruitment.js';
 import {
   icon,
   button,
@@ -16,7 +26,7 @@ import {
 } from "./components/ui.js";
 import {
   escapeHtml as e,
-  initials,
+  number,
   roleLabel,
   canManageRoster,
   canManageClub,
@@ -40,9 +50,15 @@ const navItems = [
   ["dashboard", "Tổng quan", "grid"],
   ["members", "Thành viên CLB", "users"],
   ["teams", "Đội bóng", "layers"],
+  ["discover", "Khám phá CLB", "users"],
   ["club-members", "Thành viên BCN", "users"],
   ["finance", "Sổ thu chi CLB", "layers"],
+  ["dues", "Đóng quỹ", "layers"],
   ["lineups", "Đội hình trận đấu", "flag"],
+  ["matches", "Lịch trận đấu", "flag"],
+  ["inventory", "Kho trang bị", "layers"],
+  ["recruitment", "Tuyển dụng", "users"],
+  ["polls", "Biểu quyết", "check"],
   ["activities", "Hoạt động CLB", "flag"],
   ["club", "Câu lạc bộ", "shield"],
   ["profile", "Tài khoản", "user"],
@@ -50,7 +66,9 @@ const navItems = [
 const nav = () =>
   navItems
     .filter(([route]) => route !== "club-members" || currentRole() === "owner")
-    .filter(([route]) => route !== "finance" || currentClub()?.can_view_finance)
+    .filter(([route]) => !['finance', 'dues'].includes(route) || currentClub()?.can_view_finance)
+    .filter(([route]) => route !== 'inventory' || currentClub()?.can_view_inventory)
+    .filter(([route]) => route !== 'recruitment' || canManageRoster(currentRole()))
     .map(
       ([route, name, glyph]) =>
         `<a href="#${route}" class="nav-link ${s.route === route ? "active" : ""}" ${s.route === route ? 'aria-current="page"' : ""}>${icon(glyph)}<span>${name}</span></a>`,
@@ -59,11 +77,13 @@ const nav = () =>
 const clubSelect = () =>
   `<select data-club-switch aria-label="Chuyển câu lạc bộ">${s.clubs.length ? s.clubs.map((c) => `<option value="${c.id}" ${String(c.id) === String(s.clubId) ? "selected" : ""}>${e(c.name)}</option>`).join("") : "<option>Chưa có câu lạc bộ</option>"}</select>`;
 function render() {
+  if (['forgot', 'reset'].includes(s.authMode)) { root.innerHTML = passwordResetPage(s); return; }
   if (!s.user) {
     root.innerHTML = authPage();
     return;
   }
-  root.innerHTML = `<div class="shell"><aside class="sidebar"><a class="brand" href="#dashboard"><img src="/icons/crest.svg" alt="">FCMS <small>PRO</small></a><div class="club-selector"><span class="club-icon">${e(initials(currentClub()?.name || "FC"))}</span><div><small>CÂU LẠC BỘ CỦA BẠN</small>${clubSelect()}</div></div><div class="nav-label">QUẢN LÝ CÂU LẠC BỘ</div><nav aria-label="Điều hướng chính">${nav()}<div class="nav-divider"></div><a class="nav-link ${s.route === "roadmap" ? "active" : ""}" href="#roadmap">${icon("flag")}<span>Lộ trình phát triển</span></a></nav><div class="sidebar-bottom"><div>${icon("flag")}<h3>Vững đội hình.<br>Chung mục tiêu.</h3><p>Mỗi hồ sơ chỉn chu là một bước tiến của câu lạc bộ.</p></div><small>FCMS PRO / PHIÊN BẢN NỀN TẢNG</small></div></aside><div class="workspace"><header class="topbar"><div class="breadcrumb">${icon("shield")} ${e(currentClub()?.name || "FCMS PRO")} <span>/</span> <strong>${titles[s.route]}</strong></div><a class="brand mobile-brand" href="#dashboard"><img src="/icons/crest.svg" alt="">FCMS <small>PRO</small></a><div class="header-actions"><button class="icon-button" data-action="theme" aria-label="Đổi giao diện sáng tối">${icon("moon")}</button><a class="user-link" href="#profile"><span class="avatar">${e(initials(s.user.name))}</span><div><strong>${e(s.user.name)}</strong><small>${e(roleLabel(currentRole()))}</small></div></a></div></header><div id="connection-banner" class="connection-banner" ${navigator.onLine ? "hidden" : ""} role="status">Bạn đang ngoại tuyến. Kết nối lại để cập nhật dữ liệu.</div><div class="mobile-club">${clubSelect()}</div><main id="main-content" tabindex="-1" class="page">${page()}<footer>© ${new Date().getFullYear()} FCMS PRO. Cùng câu lạc bộ vươn xa.</footer></main></div><nav class="bottom-nav" aria-label="Điều hướng di động">${nav()}</nav></div>`;
+  const club = currentClub(), background = imageUrl("background", club?.id, club?.background_version, club?.id);
+  root.innerHTML = `<div class="shell"><aside class="sidebar"><a class="brand" href="#dashboard"><img src="/icons/crest.svg" alt="">FCMS <small>PRO</small></a><div class="club-selector">${avatar(club?.name || "FC", imageUrl("club", club?.id, club?.avatar_version, club?.id), "club-icon")}<div><small>CÂU LẠC BỘ CỦA BẠN</small>${clubSelect()}</div></div><div class="nav-label">QUẢN LÝ CÂU LẠC BỘ</div><nav aria-label="Điều hướng chính">${nav()}<div class="nav-divider"></div><a class="nav-link ${s.route === "roadmap" ? "active" : ""}" href="#roadmap">${icon("flag")}<span>Lộ trình phát triển</span></a></nav><div class="sidebar-bottom"><div>${icon("flag")}<h3>Vững đội hình.<br>Chung mục tiêu.</h3><p>Mỗi hồ sơ chỉn chu là một bước tiến của câu lạc bộ.</p></div><small>FCMS PRO / PHIÊN BẢN NỀN TẢNG</small></div></aside><div class="workspace ${background ? "has-club-background" : ""}" ${background ? `style="--club-background: url('${e(background)}')"` : ""}><header class="topbar"><div class="breadcrumb">${icon("shield")} ${e(currentClub()?.name || "FCMS PRO")} <span>/</span> <strong>${titles[s.route]}</strong></div><a class="brand mobile-brand" href="#dashboard"><img src="/icons/crest.svg" alt="">FCMS <small>PRO</small></a><div class="header-actions"><button class="icon-button" data-action="theme" aria-label="Đổi giao diện sáng tối">${icon("moon")}</button><a class="user-link" href="#profile">${avatar(s.user.name, imageUrl("account", s.user.id, s.user.avatar_version))}<div><strong>${e(s.user.name)}</strong><small>${e(roleLabel(currentRole()))}</small></div></a></div></header><div id="connection-banner" class="connection-banner" ${navigator.onLine ? "hidden" : ""} role="status">Bạn đang ngoại tuyến. Kết nối lại để cập nhật dữ liệu.</div><div class="mobile-club">${clubSelect()}</div><main id="main-content" tabindex="-1" class="page">${page()}<footer>© ${new Date().getFullYear()} FCMS PRO. Cùng câu lạc bộ vươn xa.</footer></main></div><nav class="bottom-nav" aria-label="Điều hướng di động">${nav()}</nav></div>`;
 }
 function clearSession() {
   sequence++;
@@ -77,17 +97,31 @@ function clearSession() {
 }
 function clearData() {
   s.members = [];
+  s.myPlayer = null;
+  s.canClaimPlayer = false;
   s.teams = [];
   s.lineups = [];
+  s.matches = { data: [], meta: {} };
+  s.matchCalendar = [];
+  s.inventory = { data: [], current_page: 1, last_page: 1, total: 0 };
+  s.polls = { data: [], current_page: 1, last_page: 1 };
+  s.recruitment = { data: [], current_page: 1, last_page: 1, total: 0 };
   s.clubMemberships = [];
   s.activities = { celebrations: [], birthdays: [], trainings: [], awards: [] };
   s.finance = { data: [], summary: {}, meta: {} };
+  s.plannedExpenses = [];
+  s.discovery = { data: [], meta: {} };
+  s.friendlies = { data: [], meta: {} };
   s.meta = {};
   s.dashboard = {};
   s.error = "";
 }
 function readRoute() {
   const [route, query = ""] = location.hash.slice(1).split("?");
+  if (route === 'reset-password') {
+    const params = new URLSearchParams(query); s.resetToken = params.get('token') || ''; s.resetEmail = params.get('email') || ''; s.authMode = 'reset'; s.route = 'dashboard';
+    history.replaceState(null, '', location.pathname + location.search); return;
+  }
   const token = new URLSearchParams(query).get("token");
   s.route = Object.hasOwn(titles, route) ? route : "dashboard";
   s.teamRosterId = route === "team-roster" ? (new URLSearchParams(query).get("id") || "") : "";
@@ -125,17 +159,43 @@ async function loadView() {
   s.loading = true;
   render();
   try {
-    if (tenant && ["dashboard", "members", "team-roster", "teams", "lineups", "club-members", "finance", "activities"].includes(route)) {
+    if (route === 'discover') {
+      const tasks = [api.get(`/discover/clubs?${new URLSearchParams({ q: s.discoveryQuery, page: s.discoveryPage })}`, { signal })];
+      if (tenant && canManageClub(currentRole())) tasks.push(api.get(base(`/friendlies?${new URLSearchParams({ page: s.friendlyPage })}`), { signal }));
+      const results = await Promise.all(tasks);
+      if (signal.aborted || !s.user || tenant !== s.clubId || route !== s.route) return;
+      s.discovery = results[0]; s.friendlies = results[1] || { data: [], meta: {} };
+    }
+    if (tenant && ["dashboard", "members", "team-roster", "teams", "lineups", "matches", "inventory", "polls", "recruitment", "club-members", "finance", "dues", "activities", "profile"].includes(route)) {
       const tasks = [api.get(base("/teams"), { signal })];
       if (route === "dashboard")
         tasks.push(api.get(base("/dashboard"), { signal }));
       if (route === "lineups" && canManageRoster(currentRole()))
         tasks.push(api.get(base("/lineups"), { signal }));
+      if (route === 'matches' && canManageRoster(currentRole())) {
+        if (!s.matchesMonth) { const now = new Date(); s.matchesMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; s.matchesWeek = `${s.matchesMonth}-${String(now.getDate()).padStart(2, '0')}`; }
+        const query = s.matchesView === 'list' ? `/matches?${new URLSearchParams({ month: s.matchesMonth, page: s.matchesPage })}` : `/matches/calendar?${new URLSearchParams(calendarRange(s.matchesView, s.matchesMonth, s.matchesWeek))}`;
+        tasks.push(api.get(base(query), { signal }));
+      }
+      if (route === 'inventory' && currentClub()?.can_view_inventory) {
+        const query = new URLSearchParams({ page: s.inventoryPage, ...(s.inventorySearch ? { search: s.inventorySearch } : {}), ...(s.inventoryLowStock ? { low_stock: '1' } : {}), ...(s.inventoryArchived ? { archived: '1' } : {}) });
+        tasks.push(api.get(base(`/inventory?${query}`), { signal }));
+      }
+      if (route === 'polls') tasks.push(api.get(base(`/polls?${new URLSearchParams({ page: s.pollsPage })}`), { signal }));
+      if (route === 'recruitment' && canManageRoster(currentRole())) tasks.push(api.get(base(`/recruitment/posts?${new URLSearchParams({ page: s.recruitmentPage, ...(s.recruitmentStatus ? { status: s.recruitmentStatus } : {}) })}`), { signal }));
       if (route === "club-members" && currentRole() === "owner")
         tasks.push(api.get(base("/club-memberships"), { signal }));
-      if (route === "finance" && currentClub()?.can_view_finance)
-        tasks.push(api.get(base(`/finance?${new URLSearchParams({ page: s.financePage, group: s.financeGroup, ...(s.financeFrom ? { from: s.financeFrom } : {}), ...(s.financeTo ? { to: s.financeTo } : {}) })}`), { signal }));
-      if (route === "activities" && canManageRoster(currentRole())) tasks.push(api.get(base('/activities'), { signal }));
+      if (route === "finance" && currentClub()?.can_view_finance) {
+        if (!s.financeMonth) { const d = new Date(); s.financeMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; s.financeYear = String(d.getFullYear()); s.financeFrom = `${s.financeMonth}-01`; s.financeTo = `${s.financeMonth}-${String(new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()).padStart(2, '0')}`; }
+        tasks.push(api.get(base(`/finance?${new URLSearchParams({ page: s.financePage, adjustment_page: s.financeAdjustmentPage, group: s.financePeriod === 'month' ? 'day' : 'month', period: s.financePeriod, from: s.financeFrom, to: s.financeTo })}`), { signal }));
+        tasks.push(api.get(base(`/finance/planned?${new URLSearchParams({ from: s.financeFrom.slice(0, 7), to: s.financeTo.slice(0, 7) })}`), { signal }));
+      }
+      if (route === 'dues' && currentClub()?.can_view_finance) {
+        if (!s.duesMonth) { const d = new Date(); s.duesMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+        tasks.push(api.get(base(`/dues?${new URLSearchParams({ month: s.duesMonth })}`), { signal }));
+      }
+      if (route === "activities" && currentClub()?.can_manage_activities) tasks.push(api.get(base('/activities'), { signal }));
+      if (route === 'profile') tasks.push(api.get(base('/my-player'), { signal }));
       if (
         (route === "dashboard" || route === "members" || (route === "team-roster" && /^\d+$/.test(s.teamRosterId))) &&
         canManageRoster(currentRole())
@@ -143,7 +203,7 @@ async function loadView() {
         const q =
           route === "dashboard"
             ? new URLSearchParams({ per_page: "5", sort: "created_at" })
-            : route === "team-roster" ? new URLSearchParams({ team_id: s.teamRosterId, page: String(s.teamRosterPage), per_page: "15" }) : new URLSearchParams({ ...s.filters, per_page: "15" });
+            : route === "team-roster" ? new URLSearchParams({ team_id: s.teamRosterId, sort: s.teamRosterSort, page: String(s.teamRosterPage), per_page: "15" }) : new URLSearchParams({ ...s.filters, per_page: "15" });
         for (const [key, value] of [...q]) if (value === "") q.delete(key);
         tasks.push(api.get(base(`/members?${q}`), { signal }));
       }
@@ -152,11 +212,18 @@ async function loadView() {
         return;
       s.teams = unpackList(results[0]).rows;
       if (route === "lineups" && results[1]) s.lineups = unpackList(results[1]).rows;
+      if (route === 'matches' && results[1]) { if (s.matchesView === 'list') s.matches = results[1]; else s.matchCalendar = results[1].data; }
+      if (route === 'inventory' && results[1]) s.inventory = results[1];
+      if (route === 'polls' && results[1]) s.polls = results[1];
+      if (route === 'recruitment' && results[1]) s.recruitment = results[1];
       if (route === "club-members" && results[1]) s.clubMemberships = unpackList(results[1]).rows;
       if (route === "finance" && results[1]) s.finance = results[1];
+      if (route === 'finance' && results[2]) s.plannedExpenses = results[2].data;
+      if (route === 'dues') s.dues = results[1]?.data || [];
       if (route === "activities" && results[1]) s.activities = results[1].data;
+      if (route === 'profile') { s.myPlayer = results[1]?.data || null; s.canClaimPlayer = Boolean(results[1]?.eligible); }
       if (route === "dashboard") s.dashboard = results[1].data;
-      const list = ["lineups", "club-members", "finance", "activities"].includes(route) ? null : results[route === "dashboard" ? 2 : 1];
+      const list = ["lineups", "matches", "inventory", "polls", "recruitment", "club-members", "finance", "dues", "activities", "profile"].includes(route) ? null : results[route === "dashboard" ? 2 : 1];
       if (list) {
         const { rows, meta } = unpackList(list);
         s.members = route === "dashboard" ? rows.map((m) => ({ ...m, team: { name: (m.teams || []).map((t) => t.name).join(", ") || "Chưa xếp đội" }, jersey_number: null })) : rows;
@@ -209,6 +276,7 @@ function editClub(edit = false) {
     field("name", "Tên câu lạc bộ", c.name, "text", true) +
     field("city", "Thành phố", c.city) +
     field("home_ground", "Sân nhà", c.home_ground) +
+    `<fieldset class="field format-options"><legend>Khám phá CLB</legend><label><input type="checkbox" name="is_discoverable" ${c.is_discoverable ? 'checked' : ''}> Cho CLB khác xem tên, khu vực, loại sân và ảnh đại diện để mời giao hữu</label></fieldset>` +
     `<fieldset class="field format-options"><legend>Loại sân *</legend>${["5", "7", "11"].map((v) => `<label><input type="checkbox" name="formats" value="${v}" ${(c.formats || [c.format || "7"]).includes(v) ? "checked" : ""}> Sân ${v} người</label>`).join("")}</fieldset>` +
     (edit
       ? select(
@@ -229,6 +297,7 @@ function editClub(edit = false) {
     (form) =>
       submit(form, "club", async (data) => {
         data.formats = [...form.querySelectorAll('[name="formats"]:checked')].map((input) => input.value);
+        data.is_discoverable = form.elements.is_discoverable.checked;
         if (!data.formats.length) throw new Error("Vui lòng chọn ít nhất một loại sân.");
         const result = edit
           ? await api.patch(base(), data)
@@ -263,32 +332,48 @@ function editTeam() {
 async function renameTeam(team) {
   const candidates = unpackList(await api.get(base('/team-manager-candidates'))).rows;
   const managerFields = `<fieldset class="field format-options"><legend>Người quản lý đội</legend>${candidates.map((m) => `<label><input type="checkbox" name="manager_ids" value="${m.id}" ${(team.managers || []).some((x) => String(x.id) === String(m.id)) ? "checked" : ""}> ${e(m.name)}</label>`).join("") || "Chưa có tài khoản thành viên."}</fieldset>`;
-  dialog("Chỉnh sửa đội bóng", "Chỉnh sửa tên, loại sân và người quản lý.",
-    field("name", "Tên đội bóng", team.name, "text", true) + select("format", "Loại sân", (currentClub().formats || [currentClub().format]).map((v) => [v, `Sân ${v} người`]), team.format) + managerFields,
+  const today = new Date(), month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const duesInfo = team.monthly_dues ? `<p>Mức quỹ gần nhất: ${e(Number(team.monthly_dues.amount).toLocaleString('vi-VN'))} đ/tháng, từ ${e(team.monthly_dues.effective_month.slice(0, 7))}.</p>` : '<p>Đội chưa thiết lập mức quỹ.</p>';
+  const duesFields = currentClub()?.can_manage_finance ? duesInfo + field('dues_amount', 'Mức quỹ mới mỗi tháng (đồng; để trống nếu không đổi)', '', 'number').replace('min="0" max="999"', 'min="0" max="1000000000000"') + field('dues_month', 'Tháng áp dụng đề xuất', month, 'month') : '';
+  dialog("Chỉnh sửa đội bóng", "Mức quỹ mới áp dụng sớm nhất trong tháng này nếu chỉnh trước ngày 3; từ ngày 3 áp dụng sớm nhất tháng sau.",
+    field("name", "Tên đội bóng", team.name, "text", true) + select("format", "Loại sân", (currentClub().formats || [currentClub().format]).map((v) => [v, `Sân ${v} người`]), team.format) + managerFields + duesFields,
     (form) => submit(form, "team-rename", async (data) => {
       if (!data.name) throw new Error("Vui lòng nhập tên đội bóng.");
       const managerIds = [...form.querySelectorAll('[name="manager_ids"]:checked')].map((x) => Number(x.value));
-      await api.patch(base(`/teams/${team.id}`), { name: data.name, format: data.format, membership_ids: managerIds });
+      await api.patch(base(`/teams/${team.id}`), { name: data.name, format: data.format, membership_ids: managerIds, ...(data.dues_amount !== undefined && data.dues_amount !== '' ? { dues_amount: data.dues_amount, dues_month: data.dues_month } : {}) });
       await loadView();
       toast("Đã đổi tên đội bóng.");
     }));
 }
+
+function editImage(kind, member) {
+  const club = currentClub();
+  const config = kind === 'account' ? { path: '/auth/avatar', title: 'Ảnh đại diện tài khoản', version: s.user.avatar_version } : kind === 'player' ? { path: `/clubs/${encodeURIComponent(club.id)}/members/${encodeURIComponent(member.id)}/avatar`, title: `Ảnh đại diện · ${e(member.full_name)}`, version: member.avatar_version, removable: member.has_custom_avatar } : { path: `/clubs/${encodeURIComponent(club.id)}/images/${kind === 'background' ? 'background' : 'avatar'}`, title: kind === 'background' ? 'Ảnh nền CLB' : 'Ảnh đại diện CLB', version: kind === 'background' ? club.background_version : club.avatar_version };
+  const url = imageUrl(kind, member?.id, config.version, club?.id);
+  const fields = `<div class="image-picker"><div class="image-preview ${kind === 'background' ? 'image-preview-wide' : ''}">${url ? `<img src="${e(url)}" alt="Ảnh hiện tại">` : '<span>Chưa có ảnh</span>'}</div><div class="field"><label for="f-image">Chọn ảnh JPG, PNG hoặc WEBP</label><input id="f-image" name="image" type="file" accept="image/jpeg,image/png,image/webp" required><small data-error="image"></small><small>Tối đa 5 MB. ${kind === 'background' ? 'Ảnh nền sẽ được phủ màu để nội dung dễ đọc.' : ''}</small></div><div class="crop-editor" data-crop-editor><canvas hidden aria-label="Xem trước vùng ảnh đã cắt"></canvas><p data-crop-message>Chọn một ảnh để điều chỉnh khung hình.</p><div class="crop-controls" data-crop-controls hidden><label>Phóng to <input type="range" data-crop-zoom min="1" max="3" step="0.01" value="1"></label><label>Điều chỉnh ngang <input type="range" data-crop-x min="-100" max="100" value="0"></label><label>Điều chỉnh dọc <input type="range" data-crop-y min="-100" max="100" value="0"></label></div></div>${(config.removable ?? Boolean(config.version)) ? '<button type="button" class="text-button danger" data-delete-image>Xóa ảnh hiện tại</button>' : ''}</div>`;
+  const refresh = async () => { if (kind === 'account') { s.user = (await api.get('/auth/user')).data; await loadView(); } else if (kind === 'player') await loadView(); else await loadApp(); };
+  let cropper;
+  const modal = dialog(config.title, 'Chọn ảnh và điều chỉnh vùng hiển thị trước khi lưu.', fields, (form) => submit(form, 'image', async () => {
+    const file = form.elements.image.files[0];
+    if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) throw new Error('Chọn ảnh JPG, PNG hoặc WEBP tối đa 5 MB.');
+    const cropped = await cropper.exportFile();
+    const data = new FormData(); data.append('image', cropped); await api.post(config.path, data); await refresh(); toast('Đã cập nhật ảnh.');
+  }));
+  cropper = setupImageCropper(modal.querySelector('[data-crop-editor]'), modal.querySelector('[name="image"]'), { background: kind === 'background' });
+  modal.querySelector('[data-delete-image]')?.addEventListener('click', async (event) => {
+    event.currentTarget.disabled = true;
+    try { await api.delete(config.path); await refresh(); modal.close(); toast('Đã xóa ảnh.'); }
+    catch (error) { showErrors(modal.querySelector('form'), error.errors || {}, error.message); event.currentTarget.disabled = false; }
+  });
+  modal.addEventListener('close', () => cropper.destroy(), { once: true });
+  return modal;
+}
 function editMember(member = { status: "active" }) {
-  const positions = [["GK", "Goalkeeper"], ["FIXO", "Fixo"], ["ALA", "Ala"], ["PIVOT", "Pivot"], ...["CB", "LB", "RB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "ST", "CF"].map((x) => [x, x])];
   const fields =
     field("full_name", "Họ và tên", member.full_name, "text", true) +
     field("email", "Email", member.email, "email") +
     field("phone", "Số điện thoại", member.phone, "tel") +
     field("date_of_birth", "Ngày sinh", member.date_of_birth, "date") +
-    select(
-      "position",
-      "Vị trí",
-      [
-        ["", "Chưa cập nhật"],
-        ...positions,
-      ],
-      member.position,
-    ) +
     select(
       "preferred_foot",
       "Chân thuận",
@@ -390,7 +475,17 @@ async function action(el) {
     render();
     return;
   }
+  if (a === 'forgot-password') { s.authMode = 'forgot'; render(); return; }
+  if (a === 'back-to-login') { s.authMode = 'login'; s.resetToken = ''; s.resetEmail = ''; render(); return; }
   if (!s.user) return;
+  if (a === 'edit-account-avatar') return editImage('account');
+  if (a === 'change-password') return dialog('Đổi mật khẩu', 'Nhập mật khẩu hiện tại và mật khẩu mới. Các phiên cơ sở dữ liệu khác sẽ được thu hồi; phiên đã được bảo vệ sẽ cần đăng nhập lại.', field('current_password', 'Mật khẩu hiện tại', '', 'password', true) + field('password', 'Mật khẩu mới', '', 'password', true).replace('autocomplete="current-password"', 'autocomplete="new-password"') + field('password_confirmation', 'Nhập lại mật khẩu mới', '', 'password', true).replace('autocomplete="current-password"', 'autocomplete="new-password"'), (form) => submit(form, 'change-password', async (data) => { await api.patch('/auth/password', data); toast('Đã đổi mật khẩu.'); }));
+  if (a === 'edit-my-player-avatar' && s.myPlayer) return editImage('player', s.myPlayer);
+  if (a === 'claim-player' && s.canClaimPlayer) return dialog('Liên kết hồ sơ thành viên?', 'Hồ sơ có email đã xác minh của bạn sẽ được liên kết với tài khoản này trong CLB hiện tại.', '', (form) => submit(form, 'claim-player', async () => { await api.post(base('/my-player/claim'), {}); await loadView(); toast('Đã liên kết hồ sơ thành viên.'); }), 'Liên kết');
+  if (a === 'unlink-player' && s.myPlayer) return dialog('Bỏ liên kết hồ sơ?', 'Hồ sơ vẫn thuộc CLB, nhưng tài khoản này sẽ không còn quyền tự đổi ảnh hồ sơ đó.', '', (form) => submit(form, 'unlink-player', async () => { await api.delete(base('/my-player/claim')); await loadView(); toast('Đã bỏ liên kết hồ sơ.'); }), 'Bỏ liên kết');
+  if (a === 'edit-club-avatar' && canManageClub(currentRole())) return editImage('club');
+  if (a === 'edit-club-background' && canManageClub(currentRole())) return editImage('background');
+  if (a === 'edit-player-avatar' && canManageRoster(currentRole())) { const member = s.members.find((x) => String(x.id) === el.dataset.id); if (member) return editImage('player', member); }
   if (a === "retry") return loadApp();
   if (a === "new-club") return editClub();
   if (a === "edit-club" && canManageClub(currentRole())) return editClub(true);
@@ -406,10 +501,44 @@ async function action(el) {
     }), "Xác nhận xóa CLB");
   }
   if (a === "new-team") return editTeam();
-  if (["new-celebration", "new-training", "new-award", "attendance"].includes(a) && canManageRoster(currentRole())) return activityAction(a, el.dataset.id, { state: s, api, base, reload: loadView });
+  if ((a === 'new-match' || a === 'edit-match') && canManageRoster(currentRole())) return openMatch({ match: a === 'edit-match' ? [...s.matches.data, ...s.matchCalendar].find((m) => String(m.id) === el.dataset.id) : null, state: s, api, base, reload: loadView });
+  if (a === 'match-attendance' && canManageRoster(currentRole())) { const match = [...s.matches.data, ...s.matchCalendar].find((m) => String(m.id) === el.dataset.id); if (match) return openMatchAttendance({ match, api, base }); }
+  if (a === 'match-player-stats' && canManageRoster(currentRole())) { const match = [...s.matches.data, ...s.matchCalendar].find((m) => String(m.id) === el.dataset.id); if (match) return openPlayerMatchStats({ match, api, base }); }
+  if (a === 'stats-summary' && canManageRoster(currentRole())) return openPlayerStatsSummary({ api, base, teams: s.teams });
+  if (a === 'poll-new' && canManageClub(currentRole()) && currentClub()?.status === 'active') return openPollCreate({ api, base, reload: loadView });
+  if (a === 'poll-prev' || a === 'poll-next') { s.pollsPage += a === 'poll-next' ? 1 : -1; return loadView(); }
+  if (a === 'poll-vote') { const poll = s.polls.data.find((p) => String(p.id) === el.dataset.id), option = poll?.options.find((o) => String(o.id) === el.dataset.option); if (poll && option) return confirmPollVote({ poll, option, api, base, reload: loadView }); }
+  if (a === 'recruitment-prev' || a === 'recruitment-next') { s.recruitmentPage += a === 'recruitment-next' ? 1 : -1; return loadView(); }
+  if (a === 'recruitment-new' && canManageRoster(currentRole()) && currentClub()?.status === 'active') return openRecruitmentPost({ api, base, reload: loadView });
+  if (['recruitment-edit', 'recruitment-applications'].includes(a) && canManageRoster(currentRole())) {
+    const post = s.recruitment.data.find((p) => String(p.id) === el.dataset.id); if (!post) return;
+    const canManage = currentClub()?.status === 'active';
+    if (a === 'recruitment-edit' && canManage) return openRecruitmentPost({ post, api, base, reload: loadView });
+    if (a === 'recruitment-applications') return showRecruitmentApplications({ post, api, base, canManage });
+  }
+  if (a === 'matches-prev' || a === 'matches-next') { s.matchesPage += a === 'matches-next' ? 1 : -1; return loadView(); }
+  if (a === 'inventory-prev' || a === 'inventory-next') { s.inventoryPage += a === 'inventory-next' ? 1 : -1; return loadView(); }
+  if (a === 'inventory-new' && currentClub()?.can_manage_inventory) return openInventoryItem({ api, base, reload: loadView });
+  if (['inventory-edit', 'inventory-move', 'inventory-history', 'inventory-assignments', 'inventory-archive', 'inventory-restore'].includes(a) && currentClub()?.can_view_inventory) {
+    const item = s.inventory.data.find((x) => String(x.id) === el.dataset.id); if (!item) return;
+    if (a === 'inventory-history') return showInventoryHistory({ item, api, base });
+    if (a === 'inventory-assignments') return showInventoryAssignments({ item, api, base, reload: loadView, canManage: currentClub()?.can_manage_inventory });
+    if (!currentClub()?.can_manage_inventory) return;
+    if (a === 'inventory-edit') return openInventoryItem({ item, api, base, reload: loadView });
+    if (a === 'inventory-move') return openInventoryMovement({ item, api, base, reload: loadView });
+    if (a === 'inventory-restore') { await api.post(base(`/inventory/${item.id}/restore`), {}); await loadView(); toast('Đã khôi phục vật tư.'); return; }
+    return dialog('Lưu trữ vật tư?', `${e(item.name)} sẽ được ẩn khỏi danh sách. Chỉ vật tư có tồn kho bằng 0 mới được lưu trữ; lịch sử được giữ lại.`, '', (form) => submit(form, 'inventory-archive', async () => { await api.delete(base(`/inventory/${item.id}`)); if (s.inventory.data.length === 1 && s.inventoryPage > 1) s.inventoryPage--; await loadView(); toast('Đã lưu trữ vật tư.'); }), 'Lưu trữ');
+  }
+  if (["new-celebration", "new-training", "new-award", "attendance", "edit-activity", "delete-activity", "approve-activity"].includes(a) && currentClub()?.can_manage_activities) return activityAction(a, el.dataset.id, { state: s, api, base, reload: loadView });
+  if (a === 'edit-birthday' && currentRole() === 'owner') { const member = (await api.get(base(`/members/${el.dataset.id}`))).data; return editMember(member); }
   if (a === "rename-team" && canManageRoster(currentRole())) {
     const team = s.teams.find((t) => String(t.id) === el.dataset.id);
     if (team) return renameTeam(team);
+  }
+  if (a === 'edit-dues-rate' && currentClub()?.can_manage_finance) {
+    const team = s.teams.find((t) => String(t.id) === el.dataset.id); if (!team) return;
+    const date = new Date(), month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return dialog('Chỉnh sửa quỹ đội', `Đội ${e(team.name)}. Mức quỹ áp dụng sớm nhất tháng này nếu chỉnh trước ngày 3, hoặc tháng sau từ ngày 3.`, field('dues_amount', 'Mức quỹ mỗi tháng (đồng)', '', 'number', true).replace('min="0" max="999"', 'min="0" max="1000000000000"') + field('dues_month', 'Tháng áp dụng đề xuất', month, 'month', true), (form) => submit(form, 'dues-rate', async (data) => { await api.patch(base(`/teams/${team.id}/dues-rate`), data); await loadView(); toast('Đã cập nhật quỹ đội.'); }));
   }
   if (a === "delete-team" && canManageRoster(currentRole())) {
     const team = s.teams.find((t) => String(t.id) === el.dataset.id);
@@ -436,7 +565,7 @@ async function action(el) {
     const toggle = () => { modal.querySelector('[name="custom_title"]').closest('.field').hidden = modal.querySelector('[name="title_choice"]').value !== '__custom__'; };
     modal.querySelector('[name="title_choice"]').addEventListener('change', toggle); toggle();
   }
-  if (a === "new-lineup" || a === "edit-lineup" || a === "team-captain" || a === "select-team-players") {
+  if (a === "new-lineup" || a === "edit-lineup" || a === "match-lineup" || a === "team-captain" || a === "select-team-players") {
     if (!canManageRoster(currentRole())) return;
     const rows = [];
     let pageNumber = 1, lastPage = 1;
@@ -446,15 +575,29 @@ async function action(el) {
       lastPage = result.meta.last_page || 1;
       pageNumber++;
     } while (pageNumber <= lastPage);
+    if (a === 'match-lineup') {
+      const match = [...s.matches.data, ...s.matchCalendar].find((m) => String(m.id) === el.dataset.id);
+      if (!match?.team_id || !s.teams.some((t) => String(t.id) === String(match.team_id))) { toast('Đội bóng của trận không còn hoạt động.', true); return; }
+      const lineup = (await api.get(base(`/matches/${match.id}/lineup`))).data;
+      return openLineup({ teams: s.teams, players: rows, lineup, linkedMatch: match, api, base, reload: loadView });
+    }
     if (a === "select-team-players") {
       const team = s.teams.find((t) => String(t.id) === el.dataset.id);
       if (!team) return;
-      const fields = `<div class="lineup-editor lineup-roster">${rows.map((p) => `<label><span>${e(p.full_name)} · ${e(p.position || "Chưa có vị trí")}</span><input type="checkbox" name="player_ids" value="${p.id}" ${(p.teams || []).some((t) => String(t.id) === String(team.id)) ? "checked" : ""}></label>`).join("") || "Chưa có thành viên. Hãy tạo thành viên CLB trước."}</div>`;
-      return dialog("Chọn thành viên cho đội", `Chọn từ các hồ sơ đã tạo trong CLB. Bỏ chọn sẽ đưa thành viên ra khỏi đội ${e(team.name)}.`, fields, (form) => submit(form, "team-players", async () => {
+      const pickerPositions = (p) => (p.teams || []).filter((t) => String(t.format) === String(team.format) && t.position).map((t) => t.position);
+      const positions = [...new Set(rows.flatMap(pickerPositions))].sort();
+      const fields = `<div class="member-picker"><div class="filters"><label>Tìm tên <input type="search" data-pick-name placeholder="Nhập tên"></label><label>Năm sinh <input type="number" data-pick-year min="1900" max="2100" placeholder="Năm"></label><label>Chân thuận <select data-pick-foot><option value="">Tất cả</option><option value="left">Trái</option><option value="right">Phải</option><option value="both">Hai chân</option></select></label><label>Vị trí <select data-pick-position><option value="">Tất cả</option>${positions.map((p) => `<option value="${e(p)}">${e(p)}</option>`).join('')}</select></label></div><div class="member-picker-list">${rows.map((p) => `<label data-pick-row data-name="${e(p.full_name.toLocaleLowerCase('vi'))}" data-year="${e((p.date_of_birth || '').slice(0, 4))}" data-foot="${e(p.preferred_foot || '')}" data-position="${e(pickerPositions(p).join(', '))}"><input type="checkbox" name="player_ids" value="${p.id}" ${(p.teams || []).some((t) => String(t.id) === String(team.id)) ? "checked" : ""}>${avatar(p.full_name, imageUrl("player", p.id, p.avatar_version, s.clubId))}<span><strong>${e(p.full_name)}</strong><small>${e([p.date_of_birth, p.email, p.phone, pickerPositions(p).join(", "), ({left:'Chân trái', right:'Chân phải', both:'Hai chân'})[p.preferred_foot]].filter(Boolean).join(' · '))}</small></span></label>`).join("") || "Chưa có thành viên. Hãy tạo thành viên CLB trước."}</div></div>`;
+      const modal = dialog("Chọn thành viên cho đội", `Chọn từ các hồ sơ đã tạo trong CLB. Bỏ chọn sẽ đưa thành viên ra khỏi đội ${e(team.name)}.`, fields, (form) => submit(form, "team-players", async () => {
         const player_ids = [...form.querySelectorAll('[name="player_ids"]:checked')].map((x) => Number(x.value));
         await api.patch(base(`/teams/${team.id}/players`), { player_ids });
         await loadView(); toast("Đã cập nhật thành viên đội.");
       }));
+      modal.classList.add('member-picker-dialog');
+      modal.querySelectorAll('[data-pick-row]').forEach((row) => { const player = rows.find((p) => String(p.id) === row.querySelector('[name="player_ids"]').value); row.dataset.positions = JSON.stringify(pickerPositions(player)); });
+      const filter = () => { const name = modal.querySelector('[data-pick-name]').value.trim().toLocaleLowerCase('vi'), year = modal.querySelector('[data-pick-year]').value, foot = modal.querySelector('[data-pick-foot]').value, position = modal.querySelector('[data-pick-position]').value; modal.querySelectorAll('[data-pick-row]').forEach((row) => { row.hidden = !row.dataset.name.includes(name) || (year && row.dataset.year !== year) || (foot && row.dataset.foot !== foot) || (position && !JSON.parse(row.dataset.positions).includes(position)); }); };
+      modal.querySelector('.member-picker').addEventListener('input', filter);
+      modal.querySelector('.member-picker').addEventListener('change', filter);
+      return modal;
     }
     if (a === "team-captain") return openCaptain({ team: s.teams.find((t) => String(t.id) === el.dataset.id), players: rows, api, base, reload: loadView });
     return openLineup({ teams: s.teams, players: rows, lineup: s.lineups.find((x) => String(x.id) === el.dataset.id), api, base, reload: loadView });
@@ -471,8 +614,22 @@ async function action(el) {
   }
   if (a === "team-members") {
     s.teamRosterPage = 1;
+    s.teamRosterSort = 'full_name';
+    s.teamDuesFilter = '';
     location.hash = `team-roster?id=${encodeURIComponent(el.dataset.id)}`;
     return;
+  }
+  if (a === 'export-members' && canManageRoster(currentRole())) {
+    const teamId = s.route === 'team-roster' ? s.teamRosterId : s.filters.team_id;
+    const filters = s.route === 'team-roster' ? { team_id: teamId, sort: s.teamRosterSort } : s.filters;
+    const rows = []; let page = 1, last = 1;
+    do {
+      const query = new URLSearchParams({ ...filters, page: String(page), per_page: '100' });
+      for (const [key, value] of [...query]) if (!value) query.delete(key);
+      const result = unpackList(await api.get(base(`/members?${query}`)));
+      rows.push(...result.rows); last = result.meta.last_page || 1; page++;
+    } while (page <= last);
+    await exportMembers(rows, teamId); toast('Đã xuất danh sách thành viên.'); return;
   }
   if (a === "roster-prev" || a === "roster-next") {
     s.teamRosterPage += a === "roster-next" ? 1 : -1;
@@ -481,6 +638,59 @@ async function action(el) {
   if (a === "finance-prev" || a === "finance-next") {
     s.financePage += a === "finance-next" ? 1 : -1;
     return loadView();
+  }
+  if (a === 'discover-prev' || a === 'discover-next') { s.discoveryPage += a === 'discover-next' ? 1 : -1; return loadView(); }
+  if (a === 'friendlies-prev' || a === 'friendlies-next') { s.friendlyPage += a === 'friendlies-next' ? 1 : -1; return loadView(); }
+  if (a === 'invite-friendly' && canManageClub(currentRole())) {
+    const target = s.discovery.data.find((c) => String(c.id) === el.dataset.id); if (!target) return;
+    const today = new Date(), date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return dialog('Mời giao hữu', `${e(currentClub().name)} gửi lời mời đến ${e(target.name)}. CLB nhận có thể chấp nhận hoặc từ chối.`, field('match_date', 'Ngày dự kiến', date, 'date', true) + field('match_time', 'Giờ dự kiến', '', 'time') + field('location', 'Địa điểm dự kiến', '') + field('message', 'Lời nhắn', '', 'textarea'), (form) => submit(form, 'friendly', async (data) => {
+      await api.post(base('/friendlies'), { target_club_id: target.id, match_date: data.match_date, match_time: data.match_time || null, location: data.location || null, message: data.message || null });
+      s.friendlyPage = 1; await loadView(); toast('Đã gửi lời mời giao hữu trong ứng dụng.');
+    }));
+  }
+  if (a === 'friendly-response' && canManageClub(currentRole())) {
+    const item = s.friendlies.data.find((x) => String(x.id) === el.dataset.id), status = el.dataset.status;
+    if (!item || !['accepted', 'rejected', 'cancelled'].includes(status)) return;
+    const label = { accepted: 'Chấp nhận', rejected: 'Từ chối', cancelled: 'Hủy' }[status];
+    return dialog(`${label} lời mời?`, 'Lời mời sẽ được cập nhật cho cả hai CLB.', '', (form) => submit(form, 'friendly-response', async () => { await api.patch(base(`/friendlies/${item.id}`), { status }); await loadView(); toast('Đã cập nhật lời mời.'); }), label);
+  }
+  if (['new-planned-expense', 'edit-planned-expense', 'stop-planned-expense'].includes(a) && currentClub()?.can_manage_finance) {
+    const item = a === 'new-planned-expense' ? null : s.plannedExpenses.find((p) => String(p.id) === el.dataset.id && p.month === el.dataset.month);
+    if (a !== 'new-planned-expense' && !item) return;
+    const month = item?.month || s.financeFrom.slice(0, 7);
+    if (a === 'stop-planned-expense') return dialog('Dừng khoản chi dự kiến?', `Khoản ${e(item.description)} sẽ dừng từ ${e(month)}; các tháng trước vẫn giữ nguyên.`, '', (form) => submit(form, 'planned-stop', async () => { await api.delete(base(`/finance/planned/${item.id}?${new URLSearchParams({ month })}`)); await loadView(); toast('Đã dừng khoản dự kiến.'); }));
+    const fields = field('description', 'Khoản dự kiến chi', item?.description || '', 'text', true) + field('amount', 'Số tiền dự kiến (đồng; có thể để trống)', item?.amount ?? '', 'number').replace('min="0" max="999"', 'min="0" max="1000000000000"') + field('month', item ? 'Áp dụng thay đổi từ tháng' : 'Bắt đầu từ tháng', month, 'month', true) + field('notes', 'Ghi chú', item?.notes || '', 'textarea');
+    return dialog(item ? 'Sửa khoản chi dự kiến' : 'Thêm khoản chi dự kiến', 'Khoản dự kiến lặp lại hằng tháng và không tự ghi chi vào sổ.', fields, (form) => submit(form, 'planned-expense', async (data) => {
+      const payload = { description: data.description, amount: data.amount === '' ? null : data.amount, month: data.month, notes: data.notes || null };
+      if (item) await api.patch(base(`/finance/planned/${item.id}`), payload); else await api.post(base('/finance/planned'), payload);
+      await loadView(); toast('Đã lưu khoản chi dự kiến.');
+    }));
+  }
+  if (a === 'finance-adjust-prev' || a === 'finance-adjust-next') { s.financeAdjustmentPage += a === 'finance-adjust-next' ? 1 : -1; return loadView(); }
+  if (a === 'birthday-prev' || a === 'birthday-next') { s.birthdayPage += a === 'birthday-next' ? 1 : -1; render(); return; }
+  if (a === 'record-dues' && currentClub()?.can_manage_finance) {
+    const person = s.dues.find((x) => String(x.player_id) === el.dataset.id); if (!person) return;
+    return dialog('Ghi quỹ tháng', `${e(person.name)} · ${e(s.duesMonth)}. Áp dụng cho các đội đủ điều kiện; các khoản đã ghi được giữ nguyên.`, select('status', 'Hình thức', [['paid', 'Đã đóng'], ['exempt', 'Miễn đóng']]) + field('months', 'Số tháng liên tiếp (bao gồm tháng đã chọn)', 1, 'number', true).replace('min="0" max="999"', 'min="1" max="24"'), (form) => submit(form, 'dues', async (data) => {
+      await api.post(base('/dues'), { player_id: person.player_id, month: s.duesMonth, months: data.months, status: data.status });
+      await loadView(); toast('Đã ghi quỹ.');
+    }));
+  }
+  if (a === 'correct-dues' && currentClub()?.can_manage_finance) {
+    const person = s.dues.find((x) => String(x.player_id) === el.dataset.id), team = person?.teams.find((x) => String(x.team_id) === el.dataset.team);
+    if (!person || !team) return;
+    const old = ['paid', 'exempt'].includes(team.status) ? team.status : 'unpaid';
+    return dialog('Sửa trạng thái đóng quỹ', `${e(person.name)} · ${e(team.name)} · ${e(s.duesMonth)} · ${e(number(team.amount))} đ. Sổ thu chi sẽ được điều chỉnh tương ứng; thay đổi này có lưu lý do.`, select('status', 'Trạng thái đúng', [['unpaid', 'Chưa đóng'], ['paid', 'Đã đóng'], ['exempt', 'Miễn đóng']], old) + field('reason', 'Lý do điều chỉnh', '', 'text', true), (form) => submit(form, 'dues-correction', async (data) => {
+      await api.patch(base('/dues'), { player_id: person.player_id, team_id: team.team_id, month: s.duesMonth, expected_status: old, status: data.status, reason: data.reason });
+      await loadView(); toast('Đã điều chỉnh trạng thái quỹ.');
+    }));
+  }
+  if (a === 'record-team-dues' && currentClub()?.can_manage_finance) {
+    const person = s.members.find((x) => String(x.id) === el.dataset.id); if (!person) return;
+    const date = new Date(), month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return dialog('Ghi quỹ thành viên', `${e(person.full_name)} · Khoản ghi áp dụng cho các đội đủ điều kiện và giữ nguyên các khoản đã ghi.`, field('month', 'Tháng bắt đầu', month, 'month', true) + select('status', 'Hình thức', [['paid', 'Đã đóng'], ['exempt', 'Miễn đóng']]) + field('months', 'Số tháng liên tiếp', 1, 'number', true).replace('min="0" max="999"', 'min="1" max="24"'), (form) => submit(form, 'dues', async (data) => {
+      await api.post(base('/dues'), { player_id: person.id, month: data.month, months: data.months, status: data.status }); await loadView(); toast('Đã ghi quỹ.');
+    }));
   }
   if (a === "new-finance" && currentClub()?.can_manage_finance) {
     const today = new Date();
@@ -494,12 +704,19 @@ async function action(el) {
     }));
   }
   if (a === "export-finance" && currentClub()?.can_view_finance) {
-    const rows = []; let pageNumber = 1, lastPage = 1, summary = {};
+    const rows = [], adjustments = []; let pageNumber = 1, lastPage = 1, summary = {}, firstAdjustments;
     do {
       const query = new URLSearchParams({ page: pageNumber, per_page: 100, ...(s.financeFrom ? { from: s.financeFrom } : {}), ...(s.financeTo ? { to: s.financeTo } : {}) });
-      const result = await api.get(base(`/finance?${query}`)); rows.push(...result.data); lastPage = result.meta.last_page; summary = result.summary; pageNumber++;
+      const result = await api.get(base(`/finance?${query}`)); rows.push(...result.data); lastPage = result.meta.last_page; summary = result.summary; if (pageNumber === 1) firstAdjustments = result.adjustments; pageNumber++;
     } while (pageNumber <= lastPage);
-    await exportFinance(rows, summary); toast("Đã xuất sổ thu chi."); return;
+    if (firstAdjustments) {
+      adjustments.push(...firstAdjustments.data);
+      for (let page = 2; page <= firstAdjustments.meta.last_page; page++) {
+        const query = new URLSearchParams({ adjustment_page: page, per_page: 1, ...(s.financeFrom ? { from: s.financeFrom } : {}), ...(s.financeTo ? { to: s.financeTo } : {}) });
+        const result = await api.get(base(`/finance?${query}`)); adjustments.push(...result.adjustments.data);
+      }
+    }
+    await exportFinance(rows, summary, adjustments); toast("Đã xuất sổ thu chi."); return;
   }
   if (a === "import-members" && canManageRoster(currentRole())) {
     let pendingImport;
@@ -528,9 +745,10 @@ async function action(el) {
     const team = s.teams.find((t) => String(t.id) === s.teamRosterId);
     if (!member || !team) return;
     const current = (member.teams || []).find((t) => String(t.id) === String(team.id))?.position || "";
-    const choices = String(team.format) === "5" ? [["GK", "Goalkeeper"], ["FIXO", "Fixo"], ["ALA", "Ala"], ["PIVOT", "Pivot"]] : ["GK", "CB", "LB", "RB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "ST", "CF"].map((x) => [x, x]);
-    if (current && !choices.some(([id]) => id === current)) choices.push([current, `${current} (đã lưu)`]);
-    return dialog("Vị trí của đội", `${e(member.full_name)} · ${e(team.name)}`, select("position", "Vị trí", [["", "Chưa chọn"], ...choices], current), (form) => submit(form, "team-position", async (data) => {
+    const positions = { '5': ['GK', 'FIXO', 'ALA', 'PIVOT'], '7': ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'ST'], '11': ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF'] };
+    const choices = (positions[String(team.format)] || []).map((v) => [v, v]);
+    const legacy = current && !choices.some(([id]) => id === current);
+    return dialog("Vị trí của đội", `${e(member.full_name)} · ${e(team.name)} · Sân ${e(team.format)}${legacy ? ` · Vị trí cũ ${e(current)} không còn phù hợp, hãy chọn lại.` : ''}`, select("position", "Vị trí", [["", "Chưa chọn"], ...choices], legacy ? '' : current), (form) => submit(form, "team-position", async (data) => {
       await api.patch(base(`/teams/${team.id}/players/${member.id}/position`), { position: data.position || null });
       await loadView(); toast("Đã cập nhật vị trí.");
     }));
@@ -561,10 +779,11 @@ async function action(el) {
   if (a === "view-member") {
     const m = s.members.find((x) => String(x.id) === el.dataset.id);
     if (!m) return;
-    const details = [["Họ tên", m.full_name], ["Email", m.email], ["Điện thoại", m.phone], ["Ngày sinh", m.date_of_birth], ["Vị trí", m.position], ["Chân thuận", m.preferred_foot], ["Trạng thái", m.status], ["Đội bóng", (m.teams || []).map((t) => `${t.name}${t.jersey_number == null ? "" : ` #${t.jersey_number}`}`).join(", ")], ["Ghi chú", m.notes]];
+    const details = [["Họ tên", m.full_name], ["Email", m.email], ["Điện thoại", m.phone], ["Ngày sinh", m.date_of_birth], ["Chân thuận", m.preferred_foot], ["Trạng thái", m.status], ["Đội bóng", (m.teams || []).map((t) => `${t.name}${t.jersey_number == null ? "" : ` #${t.jersey_number}`}`).join(", ")], ["Ghi chú", m.notes]];
     const removeButton = s.route === 'team-roster' ? '<div class="lineup-editor"><button type="button" class="button secondary" data-remove-from-team>Xóa khỏi đội bóng</button></div>' : '';
-    const modal = dialog("Hồ sơ thành viên", "Thông tin và các đội bóng trong câu lạc bộ.", `<dl class="details lineup-editor">${details.map(([label, value]) => `<div><dt>${e(label)}</dt><dd>${e(value ?? "Chưa cập nhật")}</dd></div>`).join("")}</dl>${removeButton}`, async () => true, "Đóng");
+    const modal = dialog("Hồ sơ thành viên", "Thông tin và các đội bóng trong câu lạc bộ.", `<div class="lineup-editor profile-image-actions">${avatar(m.full_name, imageUrl('player', m.id, m.avatar_version, s.clubId))}<button type="button" class="button secondary" data-change-player-image>Đổi ảnh đại diện</button></div><dl class="details lineup-editor">${details.map(([label, value]) => `<div><dt>${e(label)}</dt><dd>${e(value ?? "Chưa cập nhật")}</dd></div>`).join("")}</dl>${removeButton}`, async () => true, "Đóng");
     modal.querySelector('[data-remove-from-team]')?.addEventListener('click', () => { modal.close(); action({ dataset: { action: 'remove-team-player', id: String(m.id) } }).catch((error) => toast(error.message, true)); });
+    modal.querySelector('[data-change-player-image]').addEventListener('click', () => { modal.close(); editImage('player', m); });
     return modal;
   }
   if (a === "delete-member") {
@@ -608,10 +827,21 @@ root.addEventListener("click", (event) => {
   if (el && !el.disabled)
     action(el).catch((error) => toast(error.message, true));
 });
+document.addEventListener('error', (event) => { if (event.target.matches?.('.avatar img')) event.target.remove(); }, true);
 root.addEventListener("change", (event) => {
+  if (event.target.matches('[data-finance-period]')) {
+    const form = event.target.closest('form');
+    form.querySelector('[data-finance-month]').hidden = event.target.value !== 'month';
+    form.querySelector('[data-finance-year]').hidden = event.target.value !== 'year';
+  }
   if (event.target.matches("[data-club-switch]")) {
     clearTimeout(searchTimer);
     s.clubId = Number(event.target.value);
+    s.birthdayPage = 1;
+    s.friendlyPage = 1;
+    s.matchesPage = 1;
+    s.inventoryPage = 1; s.inventorySearch = ''; s.inventoryLowStock = false; s.inventoryArchived = false;
+    s.pollsPage = 1; s.recruitmentPage = 1; s.recruitmentStatus = '';
     s.filters = { q: "", team_id: "", status: "", page: 1 };
     loadView();
   }
@@ -621,17 +851,34 @@ root.addEventListener("submit", (event) => {
   if (!form) return;
   event.preventDefault();
   const kind = form.dataset.form;
+  if (kind === 'forgot-password' || kind === 'reset-password') {
+    submit(form, kind, async (data) => {
+      if (kind === 'forgot-password') { const result = await api.post('/auth/forgot-password', { email: data.email }); toast(result.message); }
+      else { await api.post('/auth/reset-password', data); s.resetToken = ''; s.resetEmail = ''; s.authMode = 'login'; render(); toast('Đã đặt lại mật khẩu. Bạn có thể đăng nhập.'); }
+    });
+    return;
+  }
   if (kind === "filters") {
     s.filters = { ...values(form), page: 1 };
     loadView();
     return;
   }
+  if (kind === 'roster-sort') {
+    const data = values(form); s.teamRosterSort = data.sort; s.teamDuesFilter = data.dues_status || ''; s.teamRosterPage = 1; loadView(); return;
+  }
   if (kind === "finance-filter") {
     const data = values(form);
-    if (data.from && data.to && data.from > data.to) { toast('Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.', true); return; }
-    s.financeFrom = data.from; s.financeTo = data.to; s.financeGroup = data.group;
-    s.financePage = 1; loadView(); return;
+    if (!/^\d{4}-\d{2}$/.test(data.month) || !/^\d{4}$/.test(data.year) || Number(data.year) < 1901 || Number(data.year) > 9998) { toast('Hãy chọn tháng và năm hợp lệ.', true); return; }
+    s.financePeriod = data.period; s.financeMonth = data.month; s.financeYear = data.year;
+    if (data.period === 'year') { s.financeFrom = `${data.year}-01-01`; s.financeTo = `${data.year}-12-31`; }
+    else { const [y, m] = data.month.split('-').map(Number); s.financeFrom = `${data.month}-01`; s.financeTo = `${data.month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`; }
+    s.financePage = 1; s.financeAdjustmentPage = 1; loadView(); return;
   }
+  if (kind === 'dues-filter') { const data = values(form); s.duesMonth = data.month; s.duesSearch = data.q || ''; s.duesTeam = data.team_id || ''; s.duesStatus = data.status || ''; loadView(); return; }
+  if (kind === 'discover-filter') { s.discoveryQuery = values(form).q || ''; s.discoveryPage = 1; loadView(); return; }
+  if (kind === 'matches-filter') { const data = values(form); s.matchesView = data.view; s.matchesMonth = data.month; s.matchesWeek = data.week; s.matchesPage = 1; loadView(); return; }
+  if (kind === 'inventory-filter') { s.inventorySearch = values(form).search || ''; s.inventoryLowStock = Boolean(form.elements.low_stock.checked); s.inventoryArchived = Boolean(form.elements.archived.checked); s.inventoryPage = 1; loadView(); return; }
+  if (kind === 'recruitment-filter') { s.recruitmentStatus = values(form).status || ''; s.recruitmentPage = 1; loadView(); return; }
   submit(form, kind, async (data) => {
     if (kind === "login" || kind === "register") {
       s.user = (

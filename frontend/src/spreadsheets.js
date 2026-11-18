@@ -65,12 +65,35 @@ export async function parseMembers(file) {
   if (!rows.length) throw new Error('File chưa có dòng thành viên.');
   return rows;
 }
-export async function exportFinance(items, summary) {
+export async function exportFinance(items, summary, adjustments = []) {
   const book = await workbook(), sheet = book.addWorksheet('Thu chi');
   sheet.addRow(['Ngày', 'Loại', 'Nội dung', 'Số tiền (đồng)', 'Có ảnh xác nhận']);
   sheet.getRow(1).font = { bold: true };
   for (const item of items) sheet.addRow([String(item.occurred_on), item.type === 'income' ? 'Thu' : 'Chi', String(item.description), Number(item.amount), item.has_receipt ? 'Có' : 'Không']);
-  sheet.addRow([]); sheet.addRow(['Tổng thu', Number(summary.income || 0)]); sheet.addRow(['Tổng chi', Number(summary.expense || 0)]); sheet.addRow(['Chênh lệch', Number(summary.balance || 0)]);
+  sheet.addRow([]); sheet.addRow(['Tổng thu trong kỳ', Number(summary.income || 0)]); sheet.addRow(['Tổng chi trong kỳ', Number(summary.expense || 0)]); sheet.addRow(['Thu trừ chi trong kỳ', Number(summary.balance || 0)]); sheet.addRow(['Còn lại đến cuối kỳ', Number(summary.remaining || 0)]);
   sheet.columns.forEach((c) => { c.width = 24; }); sheet.getColumn(3).width = 50;
+  const changes = book.addWorksheet('Dieu chinh quy');
+  changes.addRow(['Ngày điều chỉnh', 'Thành viên', 'Đội', 'Tháng quỹ', 'Trạng thái cũ', 'Trạng thái mới', 'Số tiền', 'Lý do']);
+  changes.getRow(1).font = { bold: true };
+  const labels = { unpaid: 'Chưa đóng', paid: 'Đã đóng', exempt: 'Miễn đóng' };
+  for (const a of adjustments) changes.addRow([a.created_at, a.player_name, a.team_name, a.month, labels[a.old_status] || a.old_status, labels[a.new_status] || a.new_status, Number(a.amount), a.reason]);
+  changes.columns.forEach((c) => { c.width = 24; }); changes.getColumn(8).width = 45;
   await download(book, 'so-thu-chi.xlsx');
+}
+export async function buildMembersWorkbook(items, teamId = '') {
+  const book = await workbook(), sheet = book.addWorksheet('Thanh vien');
+  sheet.addRow(['Họ và tên', 'Ngày sinh', 'Điện thoại', 'Email', ...(teamId ? ['Vị trí', 'Số áo'] : ['Đội tham gia']), 'Chân thuận', 'Trạng thái', 'Ghi chú']);
+  sheet.getRow(1).font = { bold: true };
+  for (const item of items) {
+    const team = (item.teams || []).find((t) => String(t.id) === String(teamId));
+    sheet.addRow([item.full_name, item.date_of_birth, item.phone, item.email, ...(teamId ? [team?.position, team?.jersey_number ?? ''] : [(item.teams || []).map((t) => t.name).join(', ')]), item.preferred_foot, item.status, item.notes].map((value) => value == null ? '' : String(value)));
+  }
+  sheet.columns.forEach((column) => { column.width = 24; });
+  sheet.getColumn(teamId ? 9 : 8).width = 45;
+  sheet.autoFilter = { from: 'A1', to: teamId ? 'I1' : 'H1' };
+  return book;
+}
+export async function exportMembers(items, teamId = '') {
+  const book = await buildMembersWorkbook(items, teamId);
+  await download(book, teamId ? 'thanh-vien-doi-bong.xlsx' : 'thanh-vien-clb.xlsx');
 }

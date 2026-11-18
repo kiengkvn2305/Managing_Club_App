@@ -10,6 +10,16 @@ class FinanceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_remaining_balance_and_previous_period_comparisons(): void
+    {
+        $this->actingAs(User::factory()->create());
+        $club = $this->postJson('/api/v1/clubs', ['name' => 'Club', 'format' => '5'])->assertCreated()->json('data.id');
+        $path = "/api/v1/clubs/$club/finance";
+        foreach ([['income', 100, '2025-12-10'], ['income', 80, '2026-01-10'], ['expense', 30, '2026-01-20'], ['income', 40, '2026-02-10'], ['expense', 10, '2026-02-20'], ['income', 999, '2026-03-01']] as [$type, $amount, $date]) $this->postJson($path, ['type' => $type, 'amount' => $amount, 'occurred_on' => $date, 'description' => 'Test'])->assertCreated();
+        $this->getJson("$path?from=2026-02-01&to=2026-02-28&period=month&group=day")->assertOk()->assertJsonPath('summary.balance', 30)->assertJsonPath('summary.previous_balance', 50)->assertJsonPath('summary.change', -20)->assertJsonPath('summary.remaining', 180)->assertJsonPath('chart.0.period', '2026-02-10');
+        $this->getJson("$path?from=2026-01-01&to=2026-12-31&period=year&group=month")->assertOk()->assertJsonPath('summary.balance', 1079)->assertJsonPath('summary.previous_balance', 100)->assertJsonPath('summary.change', 979)->assertJsonPath('summary.remaining', 1179);
+    }
+
     public function test_finance_permissions_and_totals_are_club_scoped(): void
     {
         $owner = User::factory()->create();

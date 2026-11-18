@@ -10,7 +10,7 @@ class PlayerProfile extends Model
 {
     protected $fillable = ['team_id', 'full_name', 'email', 'phone', 'date_of_birth', 'jersey_number', 'position', 'preferred_foot', 'status', 'notes'];
 
-    protected $hidden = ['current_jersey'];
+    protected $hidden = ['current_jersey', 'avatar_path'];
 
     protected function casts(): array
     {
@@ -20,6 +20,10 @@ class PlayerProfile extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
     public function teams(): BelongsToMany
     {

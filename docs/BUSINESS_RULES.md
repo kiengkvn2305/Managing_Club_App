@@ -1,5 +1,11 @@
 # Quy tắc nghiệp vụ
 
+## Bổ sung: chi dự kiến và giao hữu
+
+- Khoản chi dự kiến lặp lại theo tháng; sửa hoặc dừng có hiệu lực từ tháng chọn, không tự phát sinh giao dịch hoặc trừ số dư. Phần lịch sử trước tháng điều chỉnh được giữ lại.
+- CLB mặc định không xuất hiện trong khám phá; người quản lý chủ động bật để chia sẻ tên, khu vực, loại sân và ảnh đại diện. Hồ sơ thành viên và dữ liệu tài chính không nằm trong dữ liệu khám phá.
+- Lời mời giao hữu là lời mời trong ứng dụng; chỉ quản lý CLB gửi hoặc phản hồi. Một cặp CLB chỉ có một lời mời đang chờ; CLB nhận chấp nhận/từ chối và CLB gửi có thể hủy. Chấp nhận chưa tự tạo trận đấu.
+
 ## Core đã triển khai
 
 - User là danh tính toàn cục; `club_members` cấp quyền theo CLB; `player_profiles` là hồ sơ cầu thủ riêng, không tự cấp/thu quyền khi CRUD.

@@ -15,9 +15,9 @@ class MySqlSchemaExportTest extends TestCase
 
         $this->assertSame($originalSchema->getConnection(), Schema::getFacadeRoot()->getConnection());
         $this->assertSame(file_get_contents(database_path('sql/fcms_pro_mysql.sql')), $sql);
-        $this->assertSame(22, preg_match_all('/^create table /m', $sql));
-        $this->assertSame(22, substr_count($sql, 'engine = InnoDB;'));
-        $this->assertSame(22, substr_count($sql, "collate 'utf8mb4_unicode_ci'"));
+        $this->assertSame(40, preg_match_all('/^create table /m', $sql));
+        $this->assertSame(40, substr_count($sql, 'engine = InnoDB;'));
+        $this->assertSame(40, substr_count($sql, "collate 'utf8mb4_unicode_ci'"));
 
         foreach (glob(database_path('migrations/*.php')) as $file) {
             $name = basename($file, '.php');

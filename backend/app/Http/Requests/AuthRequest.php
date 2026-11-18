@@ -31,6 +31,12 @@ class AuthRequest extends FormRequest
         if ($action === 'login') {
             return ['email' => ['required', 'email', 'max:255'], 'password' => ['bail', 'required', 'string', $passwordShape]];
         }
+        if ($action === 'changePassword') {
+            return [
+                'current_password' => ['bail', 'required', 'string', $passwordShape, 'current_password:web'],
+                'password' => ['bail', 'required', 'string', $passwordShape, 'confirmed', 'different:current_password', Password::min(8)],
+            ];
+        }
         $rules = ['name' => [$action === 'register' ? 'required' : 'sometimes', 'required', 'string', 'max:120'], 'email' => [$action === 'register' ? 'required' : 'sometimes', 'required', 'email', 'max:255', Rule::unique('users')->ignore($this->user()?->id)]];
         if ($action === 'register') {
             $rules['password'] = ['bail', 'required', 'string', $passwordShape, 'confirmed', Password::min(8)];

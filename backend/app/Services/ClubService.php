@@ -47,12 +47,17 @@ class ClubService
             }
             $player->save();
             if (array_key_exists('team_id', $data)) {
+                $old = DB::table('team_players')->where('club_id', $club->id)->where('player_id', $player->id)->pluck('team_id')->all();
+                $new = $player->team_id ? [(int) $player->team_id] : [];
+                $dues = app(TeamDuesService::class);
+                foreach (array_diff($old, $new) as $teamId) $dues->left($club->id, $teamId, $player->id);
+                foreach (array_diff($new, $old) as $teamId) $dues->joined($club->id, $teamId, $player->id);
                 $player->teams()->sync($player->team_id ? [$player->team_id => ['club_id' => $club->id, 'jersey_number' => $player->jersey_number, 'position' => $player->position]] : []);
                 DB::table('teams')->where('club_id', $club->id)->where('captain_id', $player->id)->when($player->team_id, fn ($q) => $q->where('id', '!=', $player->team_id))->update(['captain_id' => null]);
             }
             $this->audit->record($club, $actor, $id ? 'player.updated' : 'player.created', $player);
 
-            return $player->load(['team', 'teams']);
+            return $player->load(['team', 'teams', 'user']);
         });
     }
 

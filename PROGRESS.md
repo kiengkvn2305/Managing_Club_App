@@ -1,5 +1,17 @@
 # FCMS PRO — Tiến độ
 
+> Bổ sung: kho có cấp phát/thu hồi từng phần; lịch trận có xem tuần/tháng, liên kết đội hình, đăng ký và điểm danh thủ công; thống kê cầu thủ dựa trên bản ghi thực tế; có biểu quyết một lựa chọn và quản lý tuyển dụng nội bộ. Chưa có đơn tuyển dụng công khai, báo cáo kho đầy đủ, chia chi phí, QR, tài trợ hoặc website CLB đầy đủ. Các tính năng mới chưa được xác minh trên MySQL hoặc thiết bị di động thật.
+
+> Bổ sung: kho trang bị có danh mục, phân loại tiêu hao/tài sản, nhập/xuất, kiểm kê từng mặt hàng, cảnh báo tồn thấp, lịch sử, lưu trữ và khôi phục. Cấp phát/thu hồi theo người, báo cáo và các nghiệp vụ hỏng/mất/thanh lý riêng chưa hoàn thành; chưa kiểm thử tranh chấp đồng thời trên MySQL.
+
+> Bổ sung: đã có luồng yêu cầu và đặt lại mật khẩu bằng token một lần; cần cấu hình URL frontend và dịch vụ email để gửi thư thực. Đổi hoặc đặt lại mật khẩu thu hồi các phiên cơ sở dữ liệu tương ứng và kiểm tra dấu vân tay mật khẩu trong các phiên đã được bảo vệ.
+
+> Bổ sung: đã có danh sách lịch trận và kết quả theo tháng, có thể liên kết thủ công lời mời giao hữu đã được chấp nhận. Mỗi CLB quản lý bản lịch riêng; chưa có đồng bộ tỷ số giữa hai CLB, lịch tuần hoặc liên kết đội hình.
+
+> Bổ sung: đã có khoản chi dự kiến lặp lại theo tháng, danh sách khám phá CLB tự nguyện công khai và lời mời giao hữu trong ứng dụng với phản hồi của CLB nhận. Các khoản dự kiến không tự tạo giao dịch thực. Lời mời được chấp nhận chưa tự tạo lịch trận; những phân hệ còn thiếu vẫn được liệt kê trong [ROADMAP](docs/ROADMAP.md).
+
+> Cập nhật bổ sung: ứng dụng đã có ảnh đại diện và nền CLB, công cụ cắt ảnh, đổi mật khẩu, danh sách đội, nhập/xuất Excel, sổ thu chi, quỹ theo tháng, lịch tập, điểm danh, sinh nhật và khen thưởng. Các phân hệ này mới hoàn thiện một phần; xem trạng thái hiện tại tại [ROADMAP](docs/ROADMAP.md). Các số liệu kiểm thử và mô tả “chưa có” bên dưới là ảnh chụp giai đoạn core ban đầu, không phải trạng thái hiện tại.
+
 Cập nhật ngày 2026-11-18. **Đã bàn giao lát cắt core kiểm chứng local; chưa hoàn thành Phase0/Phase1 tổng thể hoặc toàn bộ 18 module.** Repository ban đầu trống, không có source/DB/.env người dùng bị xóa. Git đã khởi tạo, chưa commit/deploy/publish.
 
 ## Đã triển khai và kiểm chứng

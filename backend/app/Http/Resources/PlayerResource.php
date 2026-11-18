@@ -15,6 +15,8 @@ class PlayerResource extends JsonResource
             'date_of_birth' => $this->date_of_birth?->format('Y-m-d'), 'jersey_number' => $this->jersey_number,
             'position' => $this->position, 'preferred_foot' => $this->preferred_foot,
             'status' => $this->status, 'notes' => $this->notes,
+            'avatar_version' => ($this->avatar_path || $this->user?->avatar_path) ? hash('sha256', $this->avatar_path ?: $this->user->avatar_path) : null,
+            'has_custom_avatar' => (bool) $this->avatar_path,
             'team' => $this->whenLoaded('team', fn () => $this->team ? ['id' => $this->team->id, 'name' => $this->team->name] : null),
             'teams' => $this->whenLoaded('teams', fn () => $this->teams->map(fn ($team) => ['id' => $team->id, 'name' => $team->name, 'format' => $team->format, 'jersey_number' => $team->pivot->jersey_number, 'position' => $team->pivot->position])),
         ];

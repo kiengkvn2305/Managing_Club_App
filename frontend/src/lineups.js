@@ -14,13 +14,14 @@ export function openCaptain({ team, players, api, base, reload }) {
   });
 }
 
-export function openLineup({ teams, players, lineup, api, base, reload }) {
+export function openLineup({ teams, players, lineup, linkedMatch, api, base, reload }) {
   if (!teams.length) { toast("Hãy tạo đội bóng trước.", true); return; }
   const saved = new Map((lineup?.players || []).map((p) => [String(p.player_id), { ...p }]));
-  let selectedTeam = String(lineup?.team_id || teams[0].id);
+  let selectedTeam = String(lineup?.team_id || linkedMatch?.team_id || teams[0].id);
+  const linkedId = linkedMatch?.id || lineup?.club_match_id || null;
   const fields = select("team_id", "Đội bóng", teams.map((t) => [t.id, `${t.name} · sân ${t.format}`]), selectedTeam) +
-    field("opponent", "Đối thủ", lineup?.opponent || "", "text", true) +
-    field("match_date", "Ngày thi đấu", lineup?.match_date || "", "date", true) +
+    field("opponent", "Đối thủ", lineup?.opponent || linkedMatch?.opponent || "", "text", true) +
+    field("match_date", "Ngày thi đấu", lineup?.match_date || linkedMatch?.match_date || "", "date", true) +
     field("formation", "Sơ đồ chiến thuật", lineup?.formation || "") +
     '<div class="lineup-editor" data-lineup-editor></div>';
   const modal = dialog(lineup ? "Chỉnh sửa đội hình" : "Tạo đội hình trận đấu", "Chọn vai trò, rồi kéo cầu thủ đá chính trên sân. Có thể dùng các nút mũi tên để điều chỉnh.", fields, async (form) => {
@@ -29,7 +30,7 @@ export function openLineup({ teams, players, lineup, api, base, reload }) {
     if (entries.filter((p) => p.role === "starter").length > Number(team.format)) {
       showErrors(form, {}, `Sân ${team.format} tối đa ${team.format} cầu thủ đá chính.`); return false;
     }
-    const payload = { team_id: Number(selectedTeam), opponent: form.elements.opponent.value.trim(), match_date: form.elements.match_date.value, formation: form.elements.formation.value.trim() || null, players: entries };
+    const payload = { team_id: Number(selectedTeam), club_match_id: linkedId, opponent: form.elements.opponent.value.trim(), match_date: form.elements.match_date.value, formation: form.elements.formation.value.trim() || null, players: entries };
     if (!payload.opponent || !payload.match_date) { showErrors(form, {}, "Vui lòng nhập đối thủ và ngày thi đấu."); return false; }
     try {
       if (lineup) await api.patch(base(`/lineups/${lineup.id}`), payload);
@@ -37,6 +38,7 @@ export function openLineup({ teams, players, lineup, api, base, reload }) {
       await reload(); toast("Đã lưu đội hình."); return true;
     } catch (error) { showErrors(form, error.errors, error.message); return false; }
   });
+  if (linkedId) { modal.querySelector('[name="team_id"]').disabled = true; modal.querySelector('[name="opponent"]').readOnly = true; modal.querySelector('[name="match_date"]').readOnly = true; }
   const editor = modal.querySelector("[data-lineup-editor]");
   const roster = () => players.filter((p) => (p.teams || []).some((t) => String(t.id) === selectedTeam));
   const numberForTeam = (p) => (p.teams || []).find((t) => String(t.id) === selectedTeam)?.jersey_number;

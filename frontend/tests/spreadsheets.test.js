@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
-import { parseMembers } from '../src/spreadsheets.js';
+import { parseMembers, buildMembersWorkbook } from '../src/spreadsheets.js';
 
 const headers = ['full_name', 'email', 'phone', 'date_of_birth', 'position', 'preferred_foot', 'status', 'notes'];
 async function fileWith(row) {
@@ -21,4 +21,14 @@ test('imports a real Excel file and keeps phone as text', async () => {
 test('rejects formulas and numeric phone values', async () => {
   await assert.rejects(() => fileWith([{ formula: '1+1', result: 2 }]).then(parseMembers), /không dùng công thức/);
   await assert.rejects(() => fileWith(['An', '', 912345678]).then(parseMembers), /Text/);
+});
+test('team export omits club memberships while retaining team position and jersey', async () => {
+  const items = [{ full_name: 'An', phone: '0912345678', teams: [{ id: 1, name: 'A', position: 'GK', jersey_number: 0 }, { id: 2, name: 'B' }] }];
+  const team = (await buildMembersWorkbook(items, '1')).worksheets[0];
+  const headers = team.getRow(1).values.slice(1);
+  assert.equal(headers.includes('Đội tham gia'), false);
+  assert.equal(team.getRow(2).getCell(5).value, 'GK');
+  assert.equal(team.getRow(2).getCell(6).value, '0');
+  const club = (await buildMembersWorkbook(items)).worksheets[0];
+  assert.equal(club.getRow(2).getCell(5).value, 'A, B');
 });

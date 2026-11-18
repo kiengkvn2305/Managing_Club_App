@@ -38,6 +38,20 @@ class TenantSecurityTest extends TestCase
         return $this->postJson("/api/v1/clubs/$club/members", $data + ['full_name' => 'Nguyễn Văn An', 'status' => 'active'])->assertCreated()->json('data.id');
     }
 
+    public function test_roster_sorting_uses_the_selected_teams_position_across_pages(): void
+    {
+        [, $club] = $this->club();
+        $team = $this->team($club);
+        $first = $this->player($club, ['full_name' => 'An', 'date_of_birth' => '2000-01-01', 'position' => 'ST']);
+        $second = $this->player($club, ['full_name' => 'Binh', 'date_of_birth' => '1990-01-01', 'position' => 'GK']);
+        $this->patchJson("/api/v1/clubs/$club/teams/$team/players", ['player_ids' => [$first, $second]])->assertNoContent();
+        $this->patchJson("/api/v1/clubs/$club/teams/$team/players/$first/position", ['position' => 'GK'])->assertNoContent();
+        $this->patchJson("/api/v1/clubs/$club/teams/$team/players/$second/position", ['position' => 'ST'])->assertNoContent();
+        $this->getJson("/api/v1/clubs/$club/members?team_id=$team&sort=position&per_page=1&page=1")->assertOk()->assertJsonPath('data.0.id', $first);
+        $this->getJson("/api/v1/clubs/$club/members?team_id=$team&sort=position&per_page=1&page=2")->assertOk()->assertJsonPath('data.0.id', $second);
+        $this->getJson("/api/v1/clubs/$club/members?sort=date_of_birth")->assertOk()->assertJsonPath('data.0.id', $second);
+    }
+
     public function test_creation_dashboard_and_audit_use_persisted_data(): void
     {
         [$owner,$club] = $this->club();
@@ -233,6 +247,13 @@ class TenantSecurityTest extends TestCase
         $this->assertDatabaseHas('team_players', ['team_id' => $first, 'player_id' => $player, 'position' => 'CB']);
         $this->assertDatabaseHas('team_players', ['team_id' => $second, 'player_id' => $player, 'position' => 'PIVOT']);
         $this->patchJson("/api/v1/clubs/$club/teams/$second/players/$player/position", ['position' => 'INVALID'])->assertUnprocessable();
+        $this->patchJson("/api/v1/clubs/$club/teams/$second/players/$player/position", ['position' => 'CB'])->assertUnprocessable();
+        $this->patchJson("/api/v1/clubs/$club/teams/$first/players/$player/position", ['position' => 'PIVOT'])->assertUnprocessable();
+        $this->patchJson("/api/v1/clubs/$club/teams/$first/players/$player/position", ['position' => 'LW'])->assertUnprocessable();
+        $third = $this->postJson("/api/v1/clubs/$club/teams", ['name' => 'Eleven', 'format' => '11'])->assertCreated()->json('data.id');
+        $this->patchJson("/api/v1/clubs/$club/teams/$third/players", ['player_ids' => [$player]])->assertNoContent();
+        $this->patchJson("/api/v1/clubs/$club/teams/$third/players/$player/position", ['position' => 'LW'])->assertNoContent();
+        $this->patchJson("/api/v1/clubs/$club/teams/$third/players/$player/position", ['position' => 'PIVOT'])->assertUnprocessable();
     }
 
     public function test_only_owner_can_delete_club_and_deleted_club_is_hidden(): void

@@ -1,0 +1,10 @@
+import { escapeHtml as e, number } from './utils.js';
+import { button, empty } from './components/ui.js';
+const money = (value) => `${number(value)} đ`;
+
+export function sponsorshipPage({ report = {}, canManage = false } = {}) {
+  const { data = [], current_page = 1, last_page = 1, total = 0 } = report;
+  return `<div class="page-top"><div><div class="eyebrow">TÀI CHÍNH</div><h1>Tài trợ</h1><p>Theo dõi thỏa thuận và giá trị đã nhận của từng đơn vị.</p></div><div class="page-actions">${canManage ? button('sponsorship-sponsors', 'Đơn vị tài trợ') + button('sponsorship-new', 'Thêm thỏa thuận') : ''}</div></div>
+    <section class="panel"><p>Giá trị thực nhận do người quản lý ghi nhận. Mục này chưa liên kết với sổ thu chi hoặc kho và không tự tạo giao dịch.</p>
+    ${data.length ? `<div class="table-wrap"><table><thead><tr><th>Đơn vị</th><th>Thỏa thuận</th><th>Loại</th><th>Thời hạn</th><th>Cam kết</th><th>Đã nhận</th><th>Thao tác</th></tr></thead><tbody>${data.map((row) => `<tr><td>${e(row.sponsor_name)}</td><td>${e(row.title)}</td><td>${row.type === 'cash' ? 'Tiền' : 'Hiện vật'}</td><td>${e(row.starts_on)} – ${e(row.ends_on)}</td><td>${money(row.value)}</td><td>${money(row.received_value)}</td><td><button class="text-button" data-action="sponsorship-receipts" data-id="${row.id}">Chi tiết / thực nhận</button>${canManage ? ` <button class="text-button" data-action="sponsorship-edit" data-id="${row.id}">Sửa</button> <button class="text-button" data-action="sponsorship-delete" data-id="${row.id}">Xóa</button>` : ''}</td></tr>`).join('')}</tbody></table></div><div class="table-footer"><span>${number(total)} thỏa thuận</span><div><button class="icon-button" data-action="sponsorship-prev" aria-label="Trang trước" ${current_page <= 1 ? 'disabled' : ''}>←</button> ${current_page} / ${last_page} <button class="icon-button" data-action="sponsorship-next" aria-label="Trang sau" ${current_page >= last_page ? 'disabled' : ''}>→</button></div></div>` : empty('Chưa có thỏa thuận tài trợ', 'Thêm đơn vị và thỏa thuận để theo dõi.')}</section>`;
+}
